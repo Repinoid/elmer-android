@@ -72,11 +72,16 @@ class ElmForwardService : Service() {
         sessionId = null  // новая сессия
 
         val debug = intent.getStringExtra(EXTRA_DEBUG_HOST)
+        // Сетевые операции НЕЛЬЗЯ делать на main thread — обязателен background thread
         if (debug != null) {
             val p = debug.split(":")
-            tcpConnect(p[0], p.getOrNull(1)?.toIntOrNull() ?: 35000)
+            thread(name = "ElmConnect", isDaemon = true) {
+                tcpConnect(p[0], p.getOrNull(1)?.toIntOrNull() ?: 35000)
+            }
         } else {
-            intent.getStringExtra(EXTRA_DEVICE_MAC)?.let { btConnect(it) }
+            intent.getStringExtra(EXTRA_DEVICE_MAC)?.let { mac ->
+                thread(name = "ElmConnect", isDaemon = true) { btConnect(mac) }
+            }
         }
         return START_STICKY
     }
@@ -120,7 +125,7 @@ class ElmForwardService : Service() {
                         val c = buf[i].toInt().toChar()
                         if (c == '>') {
                             if (sb.isNotEmpty()) { fwd(sb.toString().trim()); sb.clear() }
-                        } else if (c != '\r') sb.append(c)
+                        } else if (c != '\r' && c != '\n') sb.append(c)
                     }
                 } catch (e: IOException) {
                     if (running) say("Lost connection")

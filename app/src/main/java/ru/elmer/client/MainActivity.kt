@@ -60,10 +60,13 @@ class MainActivity : AppCompatActivity() {
         val debugHost = url.ifBlank { null }
 
         // Если введён IP:port — TCP-режим (тест без Bluetooth)
+        // Сервер на том же IP, порт 5005
         if (debugHost != null && debugHost.contains(":") && !debugHost.startsWith("http")) {
+            val deviceHost = debugHost.split(":")[0]
+            val localServerUrl = "http://$deviceHost:5005/api/v1/raw-obd"
             val intent = Intent(this, ElmForwardService::class.java).apply {
                 action = ElmForwardService.ACTION_CONNECT
-                putExtra(ElmForwardService.EXTRA_SERVER_URL, "https://obdai.ru/api/v1/raw-obd")
+                putExtra(ElmForwardService.EXTRA_SERVER_URL, localServerUrl)
                 putExtra(ElmForwardService.EXTRA_DEBUG_HOST, debugHost)
             }
             ContextCompat.startForegroundService(this, intent)
