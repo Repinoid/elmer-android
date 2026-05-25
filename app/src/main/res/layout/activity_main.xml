@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:gravity="center_horizontal"
+    android:background="#1a1a2e">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🔧 Elmer"
+        android:textSize="32sp"
+        android:textColor="#ff6b35"
+        android:layout_marginTop="40dp"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Диагностика авто через ИИ"
+        android:textSize="14sp"
+        android:textColor="#888888"
+        android:layout_marginBottom="40dp" />
+
+    <EditText
+        android:id="@+id/et_server_url"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="URL сервера"
+        android:text="https://obdai.ru/api/v1/raw-obd"
+        android:textColor="#e0e0e0"
+        android:textColorHint="#666666"
+        android:textSize="14sp"
+        android:padding="12dp"
+        android:background="@drawable/edit_bg"
+        android:layout_marginBottom="16dp"
+        android:inputType="textUri" />
+
+    <Button
+        android:id="@+id/btn_connect"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="🚗 Диагностировать"
+        android:textSize="18sp"
+        android:textColor="#ffffff"
+        android:backgroundTint="#ff6b35"
+        android:padding="16dp"
+        android:layout_marginBottom="24dp" />
+
+    <TextView
+        android:id="@+id/tv_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Готов к подключению"
+        android:textSize="16sp"
+        android:textColor="#e0e0e0"
+        android:gravity="center"
+        android:padding="16dp" />
+
+</LinearLayout>
