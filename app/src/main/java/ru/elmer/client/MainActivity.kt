@@ -56,21 +56,34 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startDiagnostics() {
+        val url = etUrl.text.toString().trim()
+        val debugHost = url.ifBlank { null }
+
+        // Если введён IP:port — TCP-режим (тест без Bluetooth)
+        if (debugHost != null && debugHost.contains(":") && !debugHost.startsWith("http")) {
+            val intent = Intent(this, ElmForwardService::class.java).apply {
+                action = ElmForwardService.ACTION_CONNECT
+                putExtra(ElmForwardService.EXTRA_SERVER_URL, "https://obdai.ru/api/v1/raw-obd")
+                putExtra(ElmForwardService.EXTRA_DEBUG_HOST, debugHost)
+            }
+            ContextCompat.startForegroundService(this, intent)
+            tvStatus.text = "⏳ TCP подключение к $debugHost..."
+            return
+        }
+
+        // Bluetooth-режим
         if (btAdapter == null) {
             tvStatus.text = "❌ Bluetooth не поддерживается"
             return
         }
 
-        // Проверка разрешений (Android 12+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
                 != PackageManager.PERMISSION_GRANTED
             ) {
-                ActivityCompat.requestPermissions(
-                    this,
+                ActivityCompat.requestPermissions(this,
                     arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN),
-                    REQUEST_BT_PERMISSIONS
-                )
+                    REQUEST_BT_PERMISSIONS)
                 return
             }
         }
@@ -80,25 +93,23 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Ищем спаренный ELM327 (обычно название содержит "OBD" или "ELM")
         val paired = btAdapter.bondedDevices
         elmDevice = paired.find { d ->
             d.name.uppercase().let { it.contains("OBD") || it.contains("ELM") }
         }
 
         if (elmDevice == null) {
-            tvStatus.text = "❌ ELM327 не найден. Сопряги устройство в настройках Bluetooth."
-            return
+            tvStatus.text = "❌ ELM327 не найден. Сопряги в настройках Bluetooth."
+        } else {
+            val intent = Intent(this, ElmForwardService::class.java).apply {
+                action = ElmForwardService.ACTION_CONNECT
+                putExtra(ElmForwardService.EXTRA_DEVICE_MAC, elmDevice!!.address)
+                putExtra(ElmForwardService.EXTRA_SERVER_URL,
+                    etUrl.text.toString().ifBlank { "https://obdai.ru/api/v1/raw-obd" })
+            }
+            ContextCompat.startForegroundService(this, intent)
+            tvStatus.text = "⏳ Подключение..."
         }
-
-        val intent = Intent(this, ElmForwardService::class.java).apply {
-            action = ElmForwardService.ACTION_CONNECT
-            putExtra(ElmForwardService.EXTRA_DEVICE_MAC, elmDevice!!.address)
-            putExtra(ElmForwardService.EXTRA_SERVER_URL,
-                etUrl.text.toString().ifBlank { "https://obdai.ru/api/v1/raw-obd" })
-        }
-        ContextCompat.startForegroundService(this, intent)
-        tvStatus.text = "⏳ Подключение..."
     }
 
     override fun onDestroy() {
