@@ -1,10 +1,15 @@
 package ru.elmer.client
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import android.content.Intent
+import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import okhttp3.*
@@ -34,10 +39,13 @@ class ElmForwardService : Service() {
         .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
         .build()
     private var serverUrl = "https://obdai.ru/api/v1/raw-obd"
+    private var sessionId: String? = null  // сохраняем ID сессии от сервера
     private var running = false
 
     companion object {
         const val TAG = "ElmRelay"
+        const val CHANNEL_ID = "elm_relay"
+        const val NOTIFY_ID = 100
         const val ACTION_CONNECT = "ru.elmer.client.CONNECT"
         const val ACTION_DISCONNECT = "ru.elmer.client.DISCONNECT"
         const val EXTRA_DEVICE_MAC = "device_mac"
@@ -46,12 +54,22 @@ class ElmForwardService : Service() {
         const val BROADCAST_STATUS = "ru.elmer.client.STATUS"
     }
 
+    override fun onCreate() {
+        super.onCreate()
+        createNotificationChannel()
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         intent?.getStringExtra(EXTRA_SERVER_URL)?.let { serverUrl = it }
         if (intent?.action == ACTION_DISCONNECT) { disconnect(); return START_NOT_STICKY }
         if (intent?.action != ACTION_CONNECT) return START_STICKY
+
+        // Обязательно для Android 8+ — без этого сервис умрёт через 5 сек
+        startForeground(NOTIFY_ID, buildNotification())
+
+        sessionId = null  // новая сессия
 
         val debug = intent.getStringExtra(EXTRA_DEBUG_HOST)
         if (debug != null) {
@@ -118,6 +136,8 @@ class ElmForwardService : Service() {
             val json = JSONObject().apply {
                 put("raw", raw)
                 put("ts", System.currentTimeMillis())
+                // Передаём session ID чтобы сервер не сбрасывал стейт-машину
+                sessionId?.let { put("session", it) }
             }
             val req = Request.Builder().url(serverUrl)
                 .post(json.toString().toRequestBody("application/json".toMediaType()))
@@ -126,7 +146,13 @@ class ElmForwardService : Service() {
             val body = resp.body?.string() ?: ""
             resp.close()
             try {
-                val cmd = JSONObject(body).optString("cmd", "")
+                val respJson = JSONObject(body)
+                // Сохраняем сессию
+                respJson.optString("session", "").takeIf { it.isNotEmpty() }?.let {
+                    sessionId = it
+                }
+                // Сервер может ответить командой → пишем в устройство
+                val cmd = respJson.optString("cmd", "")
                 if (cmd.isNotEmpty()) write(cmd)
             } catch (_: Exception) {}
         } catch (_: IOException) {}
@@ -140,7 +166,11 @@ class ElmForwardService : Service() {
     }
 
     private fun say(msg: String) {
-        sendBroadcast(Intent(BROADCAST_STATUS).putExtra("message", msg))
+        val intent = Intent(BROADCAST_STATUS).apply {
+            putExtra("message", msg)
+            setPackage(packageName)
+        }
+        sendBroadcast(intent)
         Log.i(TAG, msg)
     }
 
@@ -148,8 +178,33 @@ class ElmForwardService : Service() {
         running = false
         try { btSocket?.close() } catch (_: Exception) {}
         try { tcpSocket?.close() } catch (_: Exception) {}
+        stopForeground(STOP_FOREGROUND_REMOVE)
         say("Disconnected")
         stopSelf()
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val ch = NotificationChannel(CHANNEL_ID, "Elmer Relay",
+                NotificationManager.IMPORTANCE_LOW)
+            getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
+        }
+    }
+
+    private fun buildNotification(): Notification {
+        val pi = PendingIntent.getActivity(this, 0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, CHANNEL_ID)
+                .setContentTitle("Elmer").setContentText("Диагностика...")
+                .setSmallIcon(android.R.drawable.ic_dialog_info).setContentIntent(pi).build()
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(this)
+                .setContentTitle("Elmer").setContentText("Диагностика...")
+                .setSmallIcon(android.R.drawable.ic_dialog_info).setContentIntent(pi).build()
+        }
     }
 
     override fun onDestroy() { disconnect(); super.onDestroy() }
