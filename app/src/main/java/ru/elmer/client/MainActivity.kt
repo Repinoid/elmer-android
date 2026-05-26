@@ -69,23 +69,26 @@ class MainActivity : AppCompatActivity() {
 
     private fun startTest() {
         val url = etUrl.text.toString().trim()
-        val hostPort = url.ifBlank { "10.47.183.102:35000" }
-        val parts = hostPort.split(":")
-        val host = parts[0]
-        val port = parts.getOrNull(1)?.toIntOrNull() ?: 35000
 
         val intent = Intent(this, TestService::class.java).apply {
             action = TestService.ACTION_RUN
-            putExtra("host", host)
-            putExtra("port", port)
+            if (url.contains(":")) {
+                // TCP-режим (mock): IP:port
+                val parts = url.split(":")
+                putExtra("host", parts[0])
+                putExtra("port", parts.getOrNull(1)?.toIntOrNull() ?: 35000)
+            }
+            // если поле пустое → BT-режим (host = null)
         }
         startService(intent)
 
-        // Регистрируем приёмник для теста
+        // Очищаем экран
+        tvStatus.text = ""
+
         registerReceiver(testReceiver, IntentFilter(TestService.BROADCAST_STATUS),
             ContextCompat.RECEIVER_NOT_EXPORTED)
 
-        tvStatus.text = "⏳ Тест запущен..."
+        tvStatus.text = "⏳ Тест..."
     }
 
     private val testReceiver = object : BroadcastReceiver() {

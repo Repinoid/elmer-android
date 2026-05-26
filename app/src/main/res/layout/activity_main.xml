@@ -38,7 +38,7 @@
         android:id="@+id/et_server_url"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="host:port"
+        android:hint="IP:port (mock) или пусто (BT)"
         android:text="10.47.183.102:35000"
         android:textColor="#e0e0e0"
         android:textColorHint="#666666"
