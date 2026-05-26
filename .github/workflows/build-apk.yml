@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup debug keystore
-        run: cp debug.keystore ~/.android/debug.keystore
+        run: mkdir -p ~/.android && cp debug.keystore ~/.android/debug.keystore
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
