@@ -45,7 +45,7 @@ class ScriptRunnerService : Service() {
     private var scriptUrl: String = ""
     private var serverUrl: String = ""
     private var running = false
-    private var paused = false  // ждём действия водителя
+    @Volatile private var paused = false  // ждём действия водителя
 
     private lateinit var db: SessionDb
     private val http = OkHttpClient.Builder()
@@ -183,24 +183,25 @@ class ScriptRunnerService : Service() {
 
             val step = steps.getJSONObject(i)
             val stepId = step.optString("id", "step_$i")
-            val cmd = step.optString("cmd", null)
-            val prompt = step.optString("prompt", null)
+            val cmd = step.optString("cmd", "")
+            val prompt = step.optString("prompt", "")
             val desc = step.optString("desc", stepId)
             val waitUser = step.optBoolean("wait_for_user", false)
 
             // Промпт водителю
-            if (prompt != null) {
+            if (prompt.isNotEmpty()) {
                 showPrompt(prompt)
                 if (waitUser) {
                     say("⏸ Жду водителя: $prompt")
+                    paused = true
                     while (paused && running) Thread.sleep(500)
                     if (!running) break
-                    showPrompt(null)  // скрыть
+                    showPrompt("")  // скрыть
                 }
                 continue  // prompt-шаги не шлют команды
             }
 
-            if (cmd == null) continue
+            if (cmd.isEmpty()) continue
 
             // Выполняем команду
             say("─── $desc ───")
@@ -419,10 +420,10 @@ class ScriptRunnerService : Service() {
         Log.i(TAG, msg)
     }
 
-    /** Показать/скрыть промпт водителю. null = скрыть. */
-    private fun showPrompt(text: String?) {
+    /** Показать/скрыть промпт водителю. Пустая строка = скрыть. */
+    private fun showPrompt(text: String) {
         sendBroadcast(Intent(BROADCAST_PROMPT).apply {
-            putExtra("prompt", text ?: "")
+            putExtra("prompt", text)
             setPackage(packageName)
         })
     }
