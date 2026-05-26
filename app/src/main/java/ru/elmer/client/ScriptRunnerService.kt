@@ -76,7 +76,7 @@ class ScriptRunnerService : Service() {
     {"id": "init_ate0",   "cmd": "ATE0", "desc": "Эхо выкл"},
     {"id": "init_atl0",   "cmd": "ATL0", "desc": "Перевод строки выкл"},
     {"id": "init_atsp0",  "cmd": "ATSP0","desc": "Авто-протокол"},
-    {"id": "init_ath1",   "cmd": "ATH1", "desc": "Заголовки вкл"},
+    {"id": "init_ath0",   "cmd": "ATH0", "desc": "Заголовки выкл"},
     {"id": "vin",         "cmd": "0902", "desc": "VIN"},
     {"id": "dtc_stored",  "cmd": "03",   "desc": "Ошибки (сохранённые)"},
     {"id": "dtc_pending", "cmd": "07",   "desc": "Ошибки (ожидающие)"},
