@@ -37,7 +37,7 @@ class MainActivity : AppCompatActivity() {
     private val statusReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val msg = intent?.getStringExtra("message") ?: return
-            runOnUiThread { tvStatus.text = msg }
+            runOnUiThread { tvStatus.append("\n$msg") }
         }
     }
 
