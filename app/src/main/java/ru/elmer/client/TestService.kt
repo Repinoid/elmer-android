@@ -136,6 +136,79 @@ class TestService : Service() {
         done("✅ ТЕСТ ПРОЙДЕН!")
     }
 
+    // ── Декодер сырых ответов ─────────────────────────
+
+    private fun decode(cmd: String, raw: String): String {
+        val clean = raw.replace(" ", "").uppercase()
+
+        // VIN: 0902 → 490201575657...
+        if (cmd == "0902" && clean.contains("490201")) {
+            val hex = clean.substringAfter("490201")
+            val vin = buildString {
+                for (i in hex.indices step 2) {
+                    if (i + 1 >= hex.length) break
+                    try { append(Integer.parseInt(hex.substring(i, i+2), 16).toChar()) }
+                    catch (_: Exception) {}
+                }
+            }
+            if (vin.length == 17) return "VIN: $vin"
+            if (vin.isNotEmpty()) return "VIN(${vin.length}): $vin"
+        }
+
+        // DTC: 43/47 → коды ошибок
+        if (clean.startsWith("43") || clean.startsWith("47")) {
+            val mode = if (clean.startsWith("43")) "stored" else "pending"
+            val hex = clean.substring(2)
+            val codes = mutableListOf<String>()
+            var i = 2 // skip byte count
+            while (i + 3 < hex.length) {
+                try {
+                    val a = Integer.parseInt(hex.substring(i, i+2), 16)
+                    val b = Integer.parseInt(hex.substring(i+2, i+4), 16)
+                    val prefix = when (a shr 6) { 0 -> "P"; 1 -> "C"; 2 -> "B"; else -> "U" }
+                    val code = "$prefix${(a shr 4) and 3}${a and 15}${b.toString(16).uppercase().padStart(2,'0')}"
+                    if (code != "P0000") codes.add(code)
+                } catch (_: Exception) {}
+                i += 4
+            }
+            if (codes.isEmpty()) return "DTC $mode: none"
+            return "DTC $mode: ${codes.joinToString(" ")}"
+        }
+
+        // PID: 41XX → значение
+        if (clean.startsWith("41") && clean.length >= 6) {
+            val pid = clean.substring(2, 4)
+            val hex = clean.substring(4)
+            try {
+                val b0 = Integer.parseInt(hex.substring(0, 2), 16)
+                val b1 = if (hex.length >= 4) Integer.parseInt(hex.substring(2, 4), 16) else 0
+                val result = when (pid) {
+                    "05" -> "${b0 - 40} °C"
+                    "0C" -> "${(b0 * 256 + b1) / 4.0} об/мин"
+                    "0D" -> "$b0 км/ч"
+                    "11" -> "${(b0 * 100.0 / 255.0).let { "%.1f".format(it) }} %"
+                    "0B" -> "$b0 кПа"
+                    "0F" -> "${b0 - 40} °C"
+                    "1F" -> "${b0 * 256 + b1} с"
+                    "04" -> "${(b0 * 100.0 / 255.0).let { "%.1f".format(it) }} %"
+                    "06", "07" -> "${((b0 - 128) * 100.0 / 128.0).let { "%.1f".format(it) }} %"
+                    else -> null
+                }
+                if (result != null) {
+                    val names = mapOf(
+                        "05" to "ОЖ", "0C" to "RPM", "0D" to "Скорость",
+                        "11" to "Дроссель", "0B" to "MAP", "0F" to "IAT",
+                        "1F" to "Время", "04" to "Нагрузка", "06" to "STFT", "07" to "LTFT"
+                    )
+                    return "${names[pid] ?: pid}: $result"
+                }
+            } catch (_: Exception) {}
+        }
+
+        // Сырой — как есть, но компактно
+        return raw.trim()
+    }
+
     // ── Низкоуровневые ────────────────────────────
 
     private fun sendAndRead(cmd: String): Boolean {
@@ -148,7 +221,7 @@ class TestService : Service() {
         }
         Thread.sleep(250)
         val resp = readResponse()
-        say("← $resp")
+        say("← ${decode(cmd, resp)}")
         return resp.isNotEmpty() && resp != "(timeout)"
     }
 
