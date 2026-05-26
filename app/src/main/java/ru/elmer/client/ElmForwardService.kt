@@ -119,6 +119,7 @@ class ElmForwardService : Service() {
         thread(name = "ElmReader", isDaemon = true) {
             val buf = ByteArray(256)
             val sb = StringBuilder()
+            var firstPrompt = true
             while (running) {
                 try {
                     val n = inp?.read(buf) ?: -1
@@ -126,7 +127,13 @@ class ElmForwardService : Service() {
                     for (i in 0 until n) {
                         val c = buf[i].toInt().toChar()
                         if (c == '>') {
-                            if (sb.isNotEmpty()) { fwd(sb.toString().trim()); sb.clear() }
+                            // Первый пустой '>' — кикстарт сервера
+                            if (firstPrompt && sb.isEmpty()) {
+                                firstPrompt = false
+                                fwd("READY")
+                            } else if (sb.isNotEmpty()) {
+                                fwd(sb.toString().trim()); sb.clear()
+                            }
                         } else if (c != '\r' && c != '\n') sb.append(c)
                     }
                 } catch (e: IOException) {
