@@ -104,34 +104,19 @@ class TestService : Service() {
 
     private fun readResponse(): String {
         val sb = StringBuilder()
-        val buf = ByteArray(256)
         try {
-            // Читаем всё что есть, пока не увидим '>' или таймаут
-            val start = System.currentTimeMillis()
-            var seenPrompt = false
-            while (System.currentTimeMillis() - start < 2000) {
-                val avail = inp?.available() ?: 0
-                if (avail > 0) {
-                    val n = inp?.read(buf) ?: -1
-                    if (n == -1) break
-                    for (i in 0 until n) {
-                        val c = buf[i].toInt().toChar()
-                        if (c == '>') { seenPrompt = true; break }
-                        if (c != '\r' && c != '\n') sb.append(c)
-                    }
-                    if (seenPrompt) break
-                } else if (sb.isNotEmpty()) {
-                    // Данные пришли и прекратились — выходим
-                    Thread.sleep(100)
-                    if ((inp?.available() ?: 0) == 0) break
-                } else {
-                    Thread.sleep(50)
-                }
+            val deadline = System.currentTimeMillis() + 3000
+            while (System.currentTimeMillis() < deadline) {
+                val b = inp?.read() ?: -1
+                if (b == -1) break
+                val c = b.toChar()
+                if (c == '>') break        // конец ответа
+                if (c != '\r' && c != '\n') sb.append(c)
             }
         } catch (e: IOException) {
-            // таймаут или разрыв
+            if (sb.isEmpty()) sb.append("(timeout)")
         }
-        return sb.toString().trim().take(100)
+        return sb.toString().trim().take(120)
     }
 
     private fun say(msg: String) {
