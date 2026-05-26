@@ -49,10 +49,52 @@ class MainActivity : AppCompatActivity() {
         tvStatus = findViewById(R.id.tv_status)
         etUrl = findViewById(R.id.et_server_url)
 
+        // Версия из build.gradle (versionName)
+        val version = packageManager.getPackageInfo(packageName, 0).versionName
+        val tvVersion = findViewById<TextView>(R.id.tv_version)
+        tvVersion.text = "v$version"
+
+        // Дефолтный URL
+        etUrl.setText("10.47.183.102:35000")
+
         registerReceiver(statusReceiver, IntentFilter(ElmForwardService.BROADCAST_STATUS),
             ContextCompat.RECEIVER_NOT_EXPORTED)
 
         btnConnect.setOnClickListener { startDiagnostics() }
+
+        // ТЕСТОВАЯ КНОПКА
+        val btnTest = findViewById<Button>(R.id.btn_test)
+        btnTest.setOnClickListener { startTest() }
+    }
+
+    private fun startTest() {
+        val url = etUrl.text.toString().trim()
+        val hostPort = url.ifBlank { "10.47.183.102:35000" }
+        val parts = hostPort.split(":")
+        val host = parts[0]
+        val port = parts.getOrNull(1)?.toIntOrNull() ?: 35000
+
+        val intent = Intent(this, TestService::class.java).apply {
+            action = TestService.ACTION_RUN
+            putExtra("host", host)
+            putExtra("port", port)
+        }
+        startService(intent)
+
+        // Регистрируем приёмник для теста
+        registerReceiver(testReceiver, IntentFilter(TestService.BROADCAST_STATUS),
+            ContextCompat.RECEIVER_NOT_EXPORTED)
+
+        tvStatus.text = "⏳ Тест запущен..."
+    }
+
+    private val testReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val msg = intent?.getStringExtra("message") ?: return
+            runOnUiThread {
+                tvStatus.append("\n$msg")
+            }
+        }
     }
 
     private fun startDiagnostics() {

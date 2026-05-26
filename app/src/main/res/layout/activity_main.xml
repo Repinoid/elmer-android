@@ -25,39 +25,68 @@
         android:textColor="#888888"
         android:layout_marginBottom="40dp" />
 
+    <TextView
+        android:id="@+id/tv_version"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="v?"
+        android:textSize="11sp"
+        android:textColor="#555"
+        android:layout_marginBottom="8dp" />
+
     <EditText
         android:id="@+id/et_server_url"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="URL сервера"
-        android:text="https://obdai.ru/api/v1/raw-obd"
+        android:hint="host:port"
+        android:text="10.47.183.102:35000"
         android:textColor="#e0e0e0"
         android:textColorHint="#666666"
         android:textSize="14sp"
         android:padding="12dp"
         android:background="@drawable/edit_bg"
-        android:layout_marginBottom="16dp"
+        android:layout_marginBottom="12dp"
         android:inputType="textUri" />
+
+    <Button
+        android:id="@+id/btn_test"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="🧪 ТЕСТ (всё локально)"
+        android:textSize="16sp"
+        android:textColor="#ffffff"
+        android:backgroundTint="#4CAF50"
+        android:padding="14dp"
+        android:layout_marginBottom="8dp" />
 
     <Button
         android:id="@+id/btn_connect"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="🚗 Диагностировать"
-        android:textSize="18sp"
+        android:text="🚗 Диагностировать (сервер)"
+        android:textSize="14sp"
         android:textColor="#ffffff"
         android:backgroundTint="#ff6b35"
-        android:padding="16dp"
-        android:layout_marginBottom="24dp" />
+        android:padding="12dp"
+        android:layout_marginBottom="16dp" />
 
-    <TextView
-        android:id="@+id/tv_status"
+    <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Готов к подключению"
-        android:textSize="16sp"
-        android:textColor="#e0e0e0"
-        android:gravity="center"
-        android:padding="16dp" />
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#0d0d1a"
+        android:padding="8dp">
+
+        <TextView
+            android:id="@+id/tv_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Готов"
+            android:textSize="12sp"
+            android:textColor="#e0e0e0"
+            android:fontFamily="monospace"
+            android:padding="8dp" />
+
+    </ScrollView>
 
 </LinearLayout>
