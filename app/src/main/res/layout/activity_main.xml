@@ -60,6 +60,17 @@
         android:layout_marginBottom="8dp" />
 
     <Button
+        android:id="@+id/btn_script"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="📋 СКРИПТ (офлайн + загрузка)"
+        android:textSize="14sp"
+        android:textColor="#ffffff"
+        android:backgroundTint="#2196F3"
+        android:padding="12dp"
+        android:layout_marginBottom="8dp" />
+
+    <Button
         android:id="@+id/btn_connect"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -68,7 +79,22 @@
         android:textColor="#ffffff"
         android:backgroundTint="#ff6b35"
         android:padding="12dp"
-        android:layout_marginBottom="16dp" />
+        android:layout_marginBottom="8dp" />
+
+    <!-- Оверлей для промптов водителю -->
+    <TextView
+        android:id="@+id/tv_prompt"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textSize="18sp"
+        android:textColor="#FFD700"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:background="#88000000"
+        android:padding="16dp"
+        android:visibility="gone"
+        android:layout_marginBottom="8dp" />
 
     <ScrollView
         android:layout_width="match_parent"

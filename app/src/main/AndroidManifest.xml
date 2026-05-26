@@ -27,6 +27,11 @@
             android:name=".TestService"
             android:exported="false" />
 
+        <service
+            android:name=".ScriptRunnerService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
