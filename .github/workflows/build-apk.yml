@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: [master, relay-only]
+    branches: [master, relay-only, fat-client]
   workflow_dispatch:
 
 jobs:
