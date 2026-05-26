@@ -88,6 +88,7 @@ class ElmForwardService : Service() {
 
     private fun btConnect(mac: String) {
         say("BT: $mac...")
+        say("🌐 Server: $serverUrl")
         try {
             val dev = BluetoothAdapter.getDefaultAdapter().getRemoteDevice(mac)
             btSocket = dev.createRfcommSocketToServiceRecord(
@@ -103,6 +104,7 @@ class ElmForwardService : Service() {
 
     private fun tcpConnect(host: String, port: Int) {
         say("TCP: $host:$port...")
+        say("🌐 Server: $serverUrl")
         try {
             tcpSocket = Socket(host, port).also { it.soTimeout = 0 }
             inp = tcpSocket?.inputStream
@@ -137,11 +139,12 @@ class ElmForwardService : Service() {
     }
 
     private fun fwd(raw: String) {
+        val preview = if (raw.length > 50) raw.take(50) + "…" else raw
+        say("← $preview")
         try {
             val json = JSONObject().apply {
                 put("raw", raw)
                 put("ts", System.currentTimeMillis())
-                // Передаём session ID чтобы сервер не сбрасывал стейт-машину
                 sessionId?.let { put("session", it) }
             }
             val req = Request.Builder().url(serverUrl)
@@ -152,15 +155,22 @@ class ElmForwardService : Service() {
             resp.close()
             try {
                 val respJson = JSONObject(body)
-                // Сохраняем сессию
                 respJson.optString("session", "").takeIf { it.isNotEmpty() }?.let {
                     sessionId = it
                 }
-                // Сервер может ответить командой → пишем в устройство
                 val cmd = respJson.optString("cmd", "")
-                if (cmd.isNotEmpty()) write(cmd)
-            } catch (_: Exception) {}
-        } catch (_: IOException) {}
+                if (cmd.isNotEmpty()) {
+                    say("→ $cmd")
+                    write(cmd)
+                }
+                val msg = respJson.optString("msg", "")
+                if (msg.isNotEmpty()) say("🖥 $msg")
+            } catch (_: Exception) {
+                say("⚠️ Bad JSON: ${body.take(60)}")
+            }
+        } catch (e: IOException) {
+            say("⚠️ Server down: ${e.message?.take(40)}")
+        }
     }
 
     private fun write(data: String) {
