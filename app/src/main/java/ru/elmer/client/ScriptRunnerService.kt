@@ -115,7 +115,7 @@ class ScriptRunnerService : Service() {
             }
             ACTION_RUN -> {
                 scriptUrl = intent.getStringExtra(EXTRA_SCRIPT_URL)
-                    ?: intent.getStringExtra(EXTRA_SERVER_URL)
+                    ?: intent.getStringExtra(EXTRA_SERVER_URL)?.let { "$it/api/v1/script" }
                     ?: "http://10.47.183.102:5005/api/v1/script"
                 serverUrl = intent.getStringExtra(EXTRA_SERVER_URL)
                     ?: "http://10.47.183.102:5005"

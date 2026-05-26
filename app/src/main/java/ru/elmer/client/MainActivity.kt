@@ -182,6 +182,7 @@ class MainActivity : AppCompatActivity() {
                 val parts = url.split(":")
                 putExtra(ScriptRunnerService.EXTRA_DEBUG_HOST, "${parts[0]}:${parts.getOrNull(1) ?: "35000"}")
                 putExtra(ScriptRunnerService.EXTRA_SERVER_URL, "http://${parts[0]}:5005")
+                putExtra(ScriptRunnerService.EXTRA_SCRIPT_URL, "http://${parts[0]}:5005/api/v1/script")
             }
             // BT-режим — host = null
         }
