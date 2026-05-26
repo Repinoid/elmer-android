@@ -89,7 +89,7 @@ class TestService : Service() {
 
     private fun sendAndRead(cmd: String): Boolean {
         try {
-            out?.write((cmd + "\r").toByteArray())
+            out?.write((cmd + "\r\n").toByteArray())
             out?.flush()
         } catch (e: Exception) {
             say("❌ WRITE FAIL: ${e.message}")
