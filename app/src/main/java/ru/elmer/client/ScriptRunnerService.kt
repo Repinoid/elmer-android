@@ -65,6 +65,34 @@ class ScriptRunnerService : Service() {
         const val EXTRA_DEBUG_HOST = "debug_host"
         const val BROADCAST_STATUS = "ru.elmer.client.SCRIPT_STATUS"
         const val BROADCAST_PROMPT = "ru.elmer.client.SCRIPT_PROMPT"  // показать водителю
+
+        // ── Встроенный скрипт (fallback без сервера) ─────
+        val DEFAULT_SCRIPT = """
+{
+  "version": 1,
+  "title": "Базовая диагностика (офлайн)",
+  "steps": [
+    {"id": "init_atz",    "cmd": "ATZ",  "desc": "Сброс ELM327"},
+    {"id": "init_ate0",   "cmd": "ATE0", "desc": "Эхо выкл"},
+    {"id": "init_atl0",   "cmd": "ATL0", "desc": "Перевод строки выкл"},
+    {"id": "init_atsp0",  "cmd": "ATSP0","desc": "Авто-протокол"},
+    {"id": "init_ath1",   "cmd": "ATH1", "desc": "Заголовки вкл"},
+    {"id": "vin",         "cmd": "0902", "desc": "VIN"},
+    {"id": "dtc_stored",  "cmd": "03",   "desc": "Ошибки (сохранённые)"},
+    {"id": "dtc_pending", "cmd": "07",   "desc": "Ошибки (ожидающие)"},
+    {"id": "pid_05", "cmd": "0105", "desc": "Температура ОЖ"},
+    {"id": "pid_0C", "cmd": "010C", "desc": "Обороты"},
+    {"id": "pid_0D", "cmd": "010D", "desc": "Скорость"},
+    {"id": "pid_11", "cmd": "0111", "desc": "Дроссель"},
+    {"id": "pid_0B", "cmd": "010B", "desc": "MAP"},
+    {"id": "pid_0F", "cmd": "010F", "desc": "IAT"},
+    {"id": "pid_1F", "cmd": "011F", "desc": "Время работы"},
+    {"id": "pid_04", "cmd": "0104", "desc": "Нагрузка"},
+    {"id": "pid_06", "cmd": "0106", "desc": "STFT"},
+    {"id": "pid_07", "cmd": "0107", "desc": "LTFT"}
+  ]
+}
+        """.trimIndent()
     }
 
     override fun onCreate() {
@@ -466,34 +494,4 @@ class ScriptRunnerService : Service() {
         }
     }
 
-    // ── Встроенный скрипт (fallback без сервера) ─────
-
-    companion object {
-        val DEFAULT_SCRIPT = """
-{
-  "version": 1,
-  "title": "Базовая диагностика (офлайн)",
-  "steps": [
-    {"id": "init_atz",    "cmd": "ATZ",  "desc": "Сброс ELM327"},
-    {"id": "init_ate0",   "cmd": "ATE0", "desc": "Эхо выкл"},
-    {"id": "init_atl0",   "cmd": "ATL0", "desc": "Перевод строки выкл"},
-    {"id": "init_atsp0",  "cmd": "ATSP0","desc": "Авто-протокол"},
-    {"id": "init_ath1",   "cmd": "ATH1", "desc": "Заголовки вкл"},
-    {"id": "vin",         "cmd": "0902", "desc": "VIN"},
-    {"id": "dtc_stored",  "cmd": "03",   "desc": "Ошибки (сохранённые)"},
-    {"id": "dtc_pending", "cmd": "07",   "desc": "Ошибки (ожидающие)"},
-    {"id": "pid_05", "cmd": "0105", "desc": "Температура ОЖ"},
-    {"id": "pid_0C", "cmd": "010C", "desc": "Обороты"},
-    {"id": "pid_0D", "cmd": "010D", "desc": "Скорость"},
-    {"id": "pid_11", "cmd": "0111", "desc": "Дроссель"},
-    {"id": "pid_0B", "cmd": "010B", "desc": "MAP"},
-    {"id": "pid_0F", "cmd": "010F", "desc": "IAT"},
-    {"id": "pid_1F", "cmd": "011F", "desc": "Время работы"},
-    {"id": "pid_04", "cmd": "0104", "desc": "Нагрузка"},
-    {"id": "pid_06", "cmd": "0106", "desc": "STFT"},
-    {"id": "pid_07", "cmd": "0107", "desc": "LTFT"}
-  ]
-}
-        """.trimIndent()
-    }
 }
