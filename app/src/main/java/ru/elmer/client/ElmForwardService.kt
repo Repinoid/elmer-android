@@ -163,6 +163,17 @@ class ElmForwardService : Service() {
                     say("→ $cmd")
                     write(cmd)
                 }
+                // Диагноз или ошибка от сервера
+                val diagnosis = respJson.optString("diagnosis", "")
+                if (diagnosis.isNotEmpty()) {
+                    say("══════════════════")
+                    say("🩺 ДИАГНОЗ:")
+                    // Разбиваем на строки по 60 символов
+                    diagnosis.chunked(60).forEach { say(it.trim()) }
+                    say("══════════════════")
+                }
+                val err = respJson.optString("error", "")
+                if (err.isNotEmpty()) say("❌ $err")
                 val msg = respJson.optString("msg", "")
                 if (msg.isNotEmpty()) say("🖥 $msg")
             } catch (_: Exception) {

@@ -11,8 +11,8 @@ android {
         applicationId = "ru.elmer.client"
         minSdk = 24
         targetSdk = 34
-        versionCode = 8
-        versionName = "0.8.0-test"
+        versionCode = 9
+        versionName = "0.9.0-prod"
     }
 
     buildTypes {

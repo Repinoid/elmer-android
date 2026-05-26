@@ -152,8 +152,9 @@ class MainActivity : AppCompatActivity() {
             val intent = Intent(this, ElmForwardService::class.java).apply {
                 action = ElmForwardService.ACTION_CONNECT
                 putExtra(ElmForwardService.EXTRA_DEVICE_MAC, elmDevice!!.address)
+                // Сервер на ноутбуке (IP смотри в ipconfig WiFi)
                 putExtra(ElmForwardService.EXTRA_SERVER_URL,
-                    etUrl.text.toString().ifBlank { "https://obdai.ru/api/v1/raw-obd" })
+                    "http://10.47.183.102:5005/api/v1/raw-obd")
             }
             ContextCompat.startForegroundService(this, intent)
             tvStatus.text = "⏳ Подключение..."
