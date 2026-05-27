@@ -37,8 +37,7 @@ class ScriptRunnerService : Service() {
     // ── Transport ──────────────────────────────
     private var btSocket: BluetoothSocket? = null
     private var tcpSocket: Socket? = null
-    private var inp: java.io.InputStream? = null
-    private var out: java.io.OutputStream? = null
+    private var elm: ElmProtocol? = null
 
     // ── State ──────────────────────────────────
     private var sessionId: Long = -1
@@ -67,16 +66,12 @@ class ScriptRunnerService : Service() {
         const val BROADCAST_PROMPT = "ru.elmer.client.SCRIPT_PROMPT"  // показать водителю
 
         // ── Встроенный скрипт (fallback без сервера) ─────
+        // Инициализация ELM327 теперь через ElmProtocol.init()
         val DEFAULT_SCRIPT = """
 {
   "version": 1,
   "title": "Базовая диагностика (офлайн)",
   "steps": [
-    {"id": "init_atz",    "cmd": "ATZ",  "desc": "Сброс ELM327"},
-    {"id": "init_ate0",   "cmd": "ATE0", "desc": "Эхо выкл"},
-    {"id": "init_atl0",   "cmd": "ATL0", "desc": "Перевод строки выкл"},
-    {"id": "init_atsp0",  "cmd": "ATSP0","desc": "Авто-протокол"},
-    {"id": "init_ath0",   "cmd": "ATH0", "desc": "Заголовки выкл"},
     {"id": "vin",         "cmd": "0902", "desc": "VIN"},
     {"id": "dtc_stored",  "cmd": "03",   "desc": "Ошибки (сохранённые)"},
     {"id": "dtc_pending", "cmd": "07",   "desc": "Ошибки (ожидающие)"},
@@ -143,8 +138,7 @@ class ScriptRunnerService : Service() {
         header("TCP $host:$port")
         try {
             tcpSocket = Socket(host, port).also { it.soTimeout = 3000 }
-            inp = tcpSocket!!.inputStream
-            out = tcpSocket!!.outputStream
+            elm = ElmProtocol(tcpSocket!!.inputStream, tcpSocket!!.outputStream)
             say("✅ TCP OK")
         } catch (e: Exception) {
             say("❌ TCP: ${e.message}"); done("Ошибка подключения"); return
@@ -169,11 +163,28 @@ class ScriptRunnerService : Service() {
 
         try {
             val uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
-            btSocket = dev.createRfcommSocketToServiceRecord(uuid)
-            adapter.cancelDiscovery()
-            btSocket?.connect()
-            inp = btSocket?.inputStream
-            out = btSocket?.outputStream
+            var socket: BluetoothSocket? = null
+            try {
+                socket = dev.createRfcommSocketToServiceRecord(uuid)
+                adapter.cancelDiscovery()
+                socket.connect()
+            } catch (e: IOException) {
+                // AndrOBD fallback: reflection RFCOMM channel 1
+                socket?.close()
+                try {
+                    val m = dev.javaClass.getMethod("createRfcommSocket", Int::class.java)
+                    socket = m.invoke(dev, 1) as BluetoothSocket
+                    socket.connect()
+                } catch (e2: Exception) {
+                    throw IOException("Fallback failed: ${e2.message}", e2)
+                }
+            }
+            btSocket = socket
+
+            // AndrOBD #233: CRITICAL 500ms pause after BT connect
+            Thread.sleep(500)
+
+            elm = ElmProtocol(btSocket!!.inputStream, btSocket!!.outputStream)
             say("✅ BT OK")
         } catch (e: Exception) {
             say("❌ BT: ${e.message}"); done(""); return
@@ -204,6 +215,12 @@ class ScriptRunnerService : Service() {
         // 3. Создаём сессию в SQLite
         sessionId = db.createSession(scriptJson, title, serverUrl)
         say("📋 Скрипт: $title (${steps.length()} шагов)")
+
+        // 3.5 Инициализация ELM327 (AndrOBD: ATSP0→ATAT1→ATS0→ATL0→ATE0)
+        if (elm != null) {
+            say("─── Инициализация ELM327 ───")
+            elm!!.init()
+        }
 
         // 4. Выполняем шаги
         for (i in 0 until steps.length()) {
@@ -390,35 +407,16 @@ class ScriptRunnerService : Service() {
         return raw.trim()
     }
 
-    // ── Low-level ELM327 ─────────────────────────────
+    // ── Low-level ELM327 (AndrOBD patterns via ElmProtocol) ──
 
     private fun sendAndRead(cmd: String): String {
-        try {
-            out?.write((cmd + "\r\n").toByteArray())
-            out?.flush()
-        } catch (e: Exception) {
-            say("❌ WRITE: ${e.message}")
-            return "(write error)"
+        val e = elm ?: return "(not connected)"
+        return try {
+            e.sendCommand(cmd)
+        } catch (ex: Exception) {
+            say("❌ ELM: ${ex.message}")
+            "(error)"
         }
-        Thread.sleep(250)
-        return readResponse()
-    }
-
-    private fun readResponse(): String {
-        val sb = StringBuilder()
-        try {
-            val deadline = System.currentTimeMillis() + 4000
-            while (System.currentTimeMillis() < deadline) {
-                val b = inp?.read() ?: -1
-                if (b == -1) break
-                val c = b.toChar()
-                if (c == '>') break
-                if (c != '\r' && c != '\n') sb.append(c)
-            }
-        } catch (e: IOException) {
-            if (sb.isEmpty()) sb.append("(timeout)")
-        }
-        return sb.toString().trim().take(120)
     }
 
     // ── UI helpers ───────────────────────────────────
