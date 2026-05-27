@@ -11,6 +11,7 @@ import android.bluetooth.BluetoothSocket
 import android.content.Intent
 import android.os.IBinder
 import android.util.Log
+import org.json.JSONObject
 import java.io.IOException
 import java.net.Socket
 import java.util.UUID
