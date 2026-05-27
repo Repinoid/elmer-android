@@ -48,7 +48,7 @@ class ServerClient(
     }
 
     /** Загружает батч ответов на сервер. Возвращает JSON-ответ или null. */
-    fun uploadSession(sessionId: Long, responses: List<Map<String, String>>): JSONObject? {
+    fun uploadSession(sessionId: Long, responses: List<Map<String, String?>>): JSONObject? {
         Log.i(TAG, "Uploading session $sessionId (${responses.size} responses)")
 
         val json = JSONObject().apply {
@@ -56,11 +56,11 @@ class ServerClient(
             put("responses", JSONArray().apply {
                 for (r in responses) {
                     put(JSONObject().apply {
-                        put("step_id", r["step_id"])
-                        put("cmd", r["cmd"])
-                        put("raw", r["raw"])
-                        put("decoded", r["decoded"])
-                        put("timestamp", r["timestamp"])
+                        put("step_id", r["step_id"] ?: "")
+                        put("cmd", r["cmd"] ?: "")
+                        put("raw", r["raw"] ?: "")
+                        put("decoded", r["decoded"] ?: "")
+                        put("timestamp", r["timestamp"] ?: "")
                     })
                 }
             })
