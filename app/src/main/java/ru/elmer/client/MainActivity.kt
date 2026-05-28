@@ -23,7 +23,6 @@ import androidx.core.content.ContextCompat
  */
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var btnConnect: Button
     private lateinit var btnScript: Button
     private lateinit var btnHistory: Button
     private lateinit var cbFullMode: CheckBox
@@ -51,7 +50,6 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        btnConnect = findViewById(R.id.btn_connect)
         btnScript = findViewById(R.id.btn_script)
         cbFullMode = findViewById(R.id.cb_full_mode)
         btnHistory = findViewById(R.id.btn_history)
@@ -72,7 +70,6 @@ class MainActivity : AppCompatActivity() {
         registerReceiver(statusReceiver, IntentFilter(ElmForwardService.BROADCAST_STATUS),
             ContextCompat.RECEIVER_NOT_EXPORTED)
 
-        btnConnect.setOnClickListener { startDiagnostics() }
 
         // ТЕСТОВАЯ КНОПКА
         val btnTest = findViewById<Button>(R.id.btn_test)
@@ -115,67 +112,6 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 tvStatus.append("\n$msg")
             }
-        }
-    }
-
-    private fun startDiagnostics() {
-        val url = etUrl.text.toString().trim()
-        val debugHost = url.ifBlank { null }
-
-        // Если введён IP:port — TCP-режим (тест без Bluetooth)
-        // Сервер на том же IP, порт 5005
-        if (debugHost != null && debugHost.contains(":") && !debugHost.startsWith("http")) {
-            val deviceHost = debugHost.split(":")[0]
-            val localServerUrl = "http://$deviceHost:5005/api/v1/raw-obd"
-            val intent = Intent(this, ElmForwardService::class.java).apply {
-                action = ElmForwardService.ACTION_CONNECT
-                putExtra(ElmForwardService.EXTRA_SERVER_URL, localServerUrl)
-                putExtra(ElmForwardService.EXTRA_DEBUG_HOST, debugHost)
-            }
-            ContextCompat.startForegroundService(this, intent)
-            tvStatus.text = "⏳ TCP подключение к $debugHost..."
-            return
-        }
-
-        // Bluetooth-режим
-        if (btAdapter == null) {
-            tvStatus.text = "❌ Bluetooth не поддерживается"
-            return
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
-                != PackageManager.PERMISSION_GRANTED
-            ) {
-                ActivityCompat.requestPermissions(this,
-                    arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN),
-                    REQUEST_BT_PERMISSIONS)
-                return
-            }
-        }
-
-        if (!btAdapter.isEnabled) {
-            startActivityForResult(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE), REQUEST_ENABLE_BT)
-            return
-        }
-
-        val paired = btAdapter.bondedDevices
-        elmDevice = paired.find { d ->
-            d.name.uppercase().let { it.contains("OBD") || it.contains("ELM") }
-        }
-
-        if (elmDevice == null) {
-            tvStatus.text = "❌ ELM327 не найден. Сопряги в настройках Bluetooth."
-        } else {
-            val intent = Intent(this, ElmForwardService::class.java).apply {
-                action = ElmForwardService.ACTION_CONNECT
-                putExtra(ElmForwardService.EXTRA_DEVICE_MAC, elmDevice!!.address)
-                // Сервер на ноутбуке (IP смотри в ipconfig WiFi)
-                putExtra(ElmForwardService.EXTRA_SERVER_URL,
-                    "http://10.47.183.102:5005/api/v1/raw-obd")
-            }
-            ContextCompat.startForegroundService(this, intent)
-            tvStatus.text = "⏳ Подключение..."
         }
     }
 

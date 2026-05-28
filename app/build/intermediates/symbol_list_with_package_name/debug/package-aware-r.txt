@@ -706,6 +706,7 @@ id beginning
 id blocking
 id bottom
 id btn_connect
+id btn_history
 id btn_script
 id btn_test
 id buttonPanel
