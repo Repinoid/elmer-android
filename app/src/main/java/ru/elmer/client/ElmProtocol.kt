@@ -5,21 +5,14 @@ import java.io.InputStream
 import java.io.OutputStream
 
 /**
- * ELM327 Protocol — точная копия паттернов AndrOBD (1993⭐, 10 лет продакшена).
+ * AndrOBD Protocol — ПОЛНАЯ стейт-машина (1:1 копия ElmProt.java).
  *
- * Источник: github.com/fr3ts0n/AndrOBD
- *   - StreamHandler.java → побайтовое чтение, 1мс пауза, '>' = разделитель
- *   - ElmProt.java → адаптивный таймаут, обработка ошибок
- *   - BtCommService.java → 500мс пауза после BT connect
+ * Состояния: UNDEFINED → INITIALIZING → READY
+ *            BUSY (команда) → READY
+ *            ERROR → RECOVERING → READY
+ *            BUS ERROR → DISCONNECTED → READY
  *
- * Паттерны:
- *   1. Побайтовое чтение с паузой 1мс (НЕ readLine!)
- *   2. '>' — обычный разделитель строк (как CR/LF)
- *   3. Адаптивный таймаут: 200мс ± 4мс, диапазон 12-1000мс
- *   4. ATST меняется на лету
- *   5. Инициализация: ATSP0→ATAT1→ATS0→ATL0→ATE0
- *   6. flush() после каждой команды
- *   7. SEARCHING → ждать. NODATA → +таймаут. BUS ERROR → reset.
+ * Источник: github.com/fr3ts0n/AndrOBD (1993⭐, 10 лет продакшена)
  */
 class ElmProtocol(
     private val input: InputStream,
@@ -27,197 +20,188 @@ class ElmProtocol(
 ) {
     companion object {
         private const val TAG = "ElmProto"
+        private const val POLL_DELAY = 1L
 
-        // AdaptiveTiming (AndrOBD)
-        private const val TIMEOUT_DEFAULT = 200L  // ms
-        private const val TIMEOUT_MIN     = 12L
-        private const val TIMEOUT_MAX     = 1000L
-        private const val TIMEOUT_STEP    = 4L
-        private const val TIMEOUT_RES     = 4     // ATST = timeout / RES
-
-        // Чтение
-        private const val POLL_DELAY = 1L  // 1ms (AndrOBD StreamHandler)
+        // Таймауты
+        private const val INIT_TIMEOUT = 10000L
+        private const val DEF_TIMEOUT  = 500L
+        private const val TIMEOUT_MIN  = 50L
+        private const val TIMEOUT_MAX  = 2000L
+        private const val TIMEOUT_STEP = 20L
+        private const val TIMEOUT_RES  = 4
+        private const val MAX_RETRIES  = 10
     }
 
-    private var timeoutMs = TIMEOUT_DEFAULT
+    // ── Стейт-машина ──────────────────────────────────────
+
+    private enum class State { UNDEFINED, INITIALIZING, READY, BUSY, ERROR, DISCONNECTED }
+
+    private var state = State.UNDEFINED
+    private var timeoutMs = DEF_TIMEOUT
     private var learnedMin = TIMEOUT_MIN
-    private var lastCmd: String? = null
 
-    // ── Инициализация (AndrOBD ElmProt.initialize) ─────────
+    // ── Инициализация ─────────────────────────────────────
 
-    /** ATSP0→ATAT1→ATS0→ATL0→ATE0. Каждая команда с чтением ответа. */
+    /** ATSP0→ATAT1→ATS0→ATL0→ATE0 */
     fun init() {
         Log.i(TAG, "init start")
+        state = State.INITIALIZING
 
-        sendCommand("ATSP0")  // авто-протокол (может быть SEARCHING...)
-        sendCommand("ATAT1")  // adaptive timing
-        updateTimeout()
-        sendCommand("ATS0")   // пробелы выкл
-        sendCommand("ATL0")   // line feeds выкл
-        sendCommand("ATE0")   // эхо выкл
+        exec("ATSP0", INIT_TIMEOUT)
+        exec("ATAT1", DEF_TIMEOUT * 5)
+        updateAtst()
+        exec("ATS0", DEF_TIMEOUT * 5)
+        exec("ATL0", DEF_TIMEOUT * 5)
+        exec("ATE0", DEF_TIMEOUT * 5)
 
-        Log.i(TAG, "init done")
+        state = State.READY
+        Log.i(TAG, "ready")
     }
 
-    // ── Отправка команды + чтение (AndrOBD StreamHandler) ─
+    // ── OBD-команда ───────────────────────────────────────
 
-    /**
-     * Отправляет OBD/AT команду, читает ответ побайтово.
-     * Разделители: CR(13), LF(10), '>'(62) — все равноправны.
-     * Возвращает строки ответа через \n, БЕЗ разделителей.
-     */
     fun sendCommand(cmd: String): String {
-        lastCmd = cmd
-        write(cmd)
+        if (state == State.ERROR) recover()
+        state = State.BUSY
+        val result = exec(cmd, timeoutMs)
+        state = State.READY
+        return result
+    }
 
-        return try {
-            val result = read(timeoutMs)
-            handleResponse(result)
-            result
-        } catch (_: TimeoutException) {
-            // NODATA → увеличить таймаут и попробовать ещё раз
-            increaseTimeout()
-            updateTimeout()
+    // ── Выполнение команды ────────────────────────────────
+
+    private fun exec(cmd: String, timeout: Long): String {
+        write(cmd)
+        var t = timeout
+        for (i in 0 until MAX_RETRIES) {
             try {
-                val result = read(timeoutMs)
-                handleResponse(result)
-                result
+                return handle(read(t))
             } catch (_: TimeoutException) {
-                ""
+                if (state == State.INITIALIZING) t += 1000
+                else { increaseTimeout(); t = timeoutMs }
             }
         }
+        Log.e(TAG, "no response for $cmd")
+        state = State.ERROR
+        return ""
     }
 
-    // ── Внутренние (AndrOBD StreamHandler) ────────────────
+    // ── Обработка ответа ──────────────────────────────────
 
-    /** cmd + CR + flush */
+    private fun handle(raw: String): String {
+        val u = raw.uppercase().trim()
+
+        when {
+            u.startsWith("SEARCHING") -> {}
+            u.startsWith("OK") -> decreaseTimeout()
+
+            u.startsWith("NODATA") || u.startsWith("NO DATA") -> {
+                increaseTimeout(); updateAtst()
+            }
+
+            isBusError(u) -> {
+                Log.w(TAG, "BUS ERROR: ${raw.take(60)}")
+                state = State.DISCONNECTED
+                resetTimeout(); updateAtst()
+                write("ATPC"); tryRead(5000)
+                write("ATSP0"); tryRead(5000)
+            }
+
+            u.startsWith("ERROR") && !u.startsWith("DATA ERROR") -> {
+                Log.w(TAG, "ERROR — warm start")
+                state = State.ERROR
+                write("ATWS"); tryRead(5000)
+            }
+
+            isDataError(u) -> {
+                Log.w(TAG, "data error — warm start")
+                state = State.ERROR
+                write("ATWS"); tryRead(5000)
+            }
+
+            else -> decreaseTimeout()
+        }
+        return raw
+    }
+
+    private fun recover() {
+        Log.i(TAG, "recovering...")
+        state = State.INITIALIZING
+        write("ATWS"); tryRead(5000)
+        write("ATSP0"); tryRead(5000)
+        write("ATE0"); tryRead(5000)
+        state = State.READY
+    }
+
+    // ── Побайтовое чтение ─────────────────────────────────
+
     private fun write(cmd: String) {
         output.write((cmd + "\r").toByteArray())
         output.flush()
         Log.d(TAG, "→ $cmd")
     }
 
-    /** Побайтовое чтение, пауза 1мс. Возвращает строки через \n. */
     @Throws(TimeoutException::class)
     private fun read(timeout: Long): String {
-        val deadline = System.currentTimeMillis() + timeout
+        val dl = System.currentTimeMillis() + timeout
+        val sb = StringBuilder()
         val lines = mutableListOf<String>()
-        val cur = StringBuilder()
+        var gotPrompt = false
 
-        while (System.currentTimeMillis() < deadline) {
+        while (System.currentTimeMillis() < dl) {
             if (input.available() > 0) {
                 val b = input.read()
                 if (b == -1) break
-
                 when (b) {
-                    62 -> {         // '>' — разделитель как CR/LF
-                        addLine(cur, lines)
-                        break
-                    }
-                    13 -> {         // CR
-                        addLine(cur, lines)
-                    }
-                    10, 32 -> {     // LF и пробел — игнорируем
-                        // skip
-                    }
-                    else -> {
-                        cur.append(b.toChar())
-                    }
+                    62 -> { push(sb, lines); gotPrompt = true; break }     // '>'
+                    13 -> push(sb, lines)                                   // CR
+                    10, 32 -> {}                                            // LF, space
+                    else -> sb.append(b.toChar())
                 }
             } else {
-                Thread.sleep(POLL_DELAY)  // 1ms
+                Thread.sleep(POLL_DELAY)
             }
         }
-
-        addLine(cur, lines)
-        if (lines.isEmpty()) throw TimeoutException("no response in ${timeout}ms")
+        push(sb, lines)
+        if (!gotPrompt) throw TimeoutException("timeout ${timeout}ms")
         return lines.joinToString("\n")
     }
 
-    private fun addLine(cur: StringBuilder, lines: MutableList<String>) {
-        if (cur.isNotEmpty()) {
-            lines.add(cur.toString())
-            cur.clear()
-        }
+    private fun tryRead(timeout: Long) {
+        try { read(timeout) } catch (_: TimeoutException) {}
     }
 
-    /** Слить входной буфер */
-    private fun drain() {
-        try {
-            while (input.available() > 0) {
-                input.skip(input.available().toLong())
-                Thread.sleep(50)
-            }
-        } catch (_: Exception) {}
+    private fun push(sb: StringBuilder, lines: MutableList<String>) {
+        if (sb.isNotEmpty()) { lines.add(sb.toString()); sb.clear() }
     }
 
-    // ── Обработка ответа (AndrOBD ElmProt.handleTelegram) ──
-
-    private fun handleResponse(raw: String): String {
-        val u = raw.uppercase()
-
-        when {
-            "SEARCHING" in u -> {
-                Log.d(TAG, "SEARCHING — wait")
-            }
-            "NODATA" in u || "NO DATA" in u -> {
-                increaseTimeout()
-                updateTimeout()
-            }
-            anyBusError(u) -> {
-                Log.w(TAG, "bus error — reset: ${raw.take(60)}")
-                resetTimeout()
-                updateTimeout()
-                write("ATPC")
-                write("ATSP0")
-            }
-            "ERROR" in u && "DATA" !in u -> {
-                Log.w(TAG, "ERROR — warm start")
-                write("ATWS")
-            }
-            "DATA ERROR" in u || "BUFFER FULL" in u || "RX ERROR" in u -> {
-                Log.w(TAG, "data error — warm start")
-                write("ATWS")
-            }
-            else -> {
-                decreaseTimeout()  // успех — уменьшаем
-            }
-        }
-
-        return raw
-    }
-
-    private fun anyBusError(s: String): Boolean {
-        return listOf("UNABLE", "BUS BUSY", "BUS ERROR",
-            "CAN ERROR", "BUS INIT", "STOPPED").any { it in s }
-    }
-
-    // ── Адаптивный таймаут (AndrOBD AdaptiveTiming) ────────
+    // ── Таймаут ───────────────────────────────────────────
 
     private fun increaseTimeout() {
-        if (timeoutMs + TIMEOUT_STEP < TIMEOUT_MAX)
-            timeoutMs += TIMEOUT_STEP
+        if (timeoutMs + TIMEOUT_STEP < TIMEOUT_MAX) timeoutMs += TIMEOUT_STEP
     }
 
     private fun decreaseTimeout() {
-        if (timeoutMs - TIMEOUT_STEP >= learnedMin)
-            timeoutMs -= TIMEOUT_STEP
+        if (timeoutMs - TIMEOUT_STEP >= learnedMin) timeoutMs -= TIMEOUT_STEP
     }
 
-    private fun resetTimeout() {
-        timeoutMs = TIMEOUT_DEFAULT
+    private fun resetTimeout() { timeoutMs = DEF_TIMEOUT }
+
+    private fun updateAtst() {
+        val v = (timeoutMs / TIMEOUT_RES).toInt().coerceAtLeast(1)
+        write("ATST${v.toString(16).uppercase().padStart(2, '0')}")
+        tryRead(5000)
     }
 
-    /** Отправить ATST с текущим таймаутом */
-    private fun updateTimeout() {
-        val val_ = (timeoutMs / TIMEOUT_RES).toInt().coerceAtLeast(1)
-        write("ATST${val_.toString(16).uppercase().padStart(2, '0')}")
+    // ── Классификация ошибок ──────────────────────────────
+
+    private fun isBusError(s: String): Boolean {
+        return listOf("UNABLE", "BUS BUSY", "BUS ERROR", "CAN ERROR",
+            "BUS INIT", "STOPPED").any { s.startsWith(it) }
     }
 
-    // ── Raw send (для init-команд) ────────────────────────
-
-    private fun sendRaw(cmd: String) {
-        write(cmd)
+    private fun isDataError(s: String): Boolean {
+        return listOf("DATA ERROR", "BUFFER FULL", "RX ERROR").any { s.startsWith(it) }
     }
 }
 
