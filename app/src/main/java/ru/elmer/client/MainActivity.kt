@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
@@ -24,6 +25,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var btnConnect: Button
     private lateinit var btnScript: Button
+    private lateinit var cbFullMode: CheckBox
     private lateinit var tvStatus: TextView
     private lateinit var tvPrompt: TextView
     private lateinit var etUrl: EditText
@@ -50,6 +52,7 @@ class MainActivity : AppCompatActivity() {
 
         btnConnect = findViewById(R.id.btn_connect)
         btnScript = findViewById(R.id.btn_script)
+        cbFullMode = findViewById(R.id.cb_full_mode)
         tvStatus = findViewById(R.id.tv_status)
         tvPrompt = findViewById(R.id.tv_prompt)
         etUrl = findViewById(R.id.et_server_url)
@@ -177,14 +180,15 @@ class MainActivity : AppCompatActivity() {
 
         val intent = Intent(this, ScriptRunnerService::class.java).apply {
             action = ScriptRunnerService.ACTION_RUN
+            val mode = if (cbFullMode.isChecked) "full" else "test"
             if (url.contains(":") && !url.startsWith("http")) {
-                // TCP-режим (mock): IP:port
                 val parts = url.split(":")
                 putExtra(ScriptRunnerService.EXTRA_DEBUG_HOST, "${parts[0]}:${parts.getOrNull(1) ?: "35000"}")
                 putExtra(ScriptRunnerService.EXTRA_SERVER_URL, "http://${parts[0]}:5005")
-                putExtra(ScriptRunnerService.EXTRA_SCRIPT_URL, "http://${parts[0]}:5005/api/v1/script")
+                putExtra(ScriptRunnerService.EXTRA_SCRIPT_URL, "http://${parts[0]}:5005/api/v1/script?mode=$mode")
+            } else {
+                putExtra(ScriptRunnerService.EXTRA_SCRIPT_URL, "https://obdai.ru/api/v1/script?mode=$mode")
             }
-            // BT-режим — host = null
         }
         ContextCompat.startForegroundService(this, intent)
 
