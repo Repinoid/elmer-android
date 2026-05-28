@@ -10,7 +10,6 @@ import android.os.Bundle
 import android.os.IBinder
 import android.widget.Button
 import android.widget.CheckBox
-import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -26,9 +25,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnScript: Button
     private lateinit var btnHistory: Button
     private lateinit var cbFullMode: CheckBox
+    private lateinit var cbMock: CheckBox
     private lateinit var tvStatus: TextView
     private lateinit var tvPrompt: TextView
-    private lateinit var etUrl: EditText
 
     private val btAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     private var elmDevice: BluetoothDevice? = null
@@ -37,6 +36,8 @@ class MainActivity : AppCompatActivity() {
     companion object {
         const val REQUEST_BT_PERMISSIONS = 1
         const val REQUEST_ENABLE_BT = 2
+        const val MOCK_HOST = "10.47.183.102"
+        const val MOCK_PORT = 35000
     }
 
     private val statusReceiver = object : BroadcastReceiver() {
@@ -52,20 +53,17 @@ class MainActivity : AppCompatActivity() {
 
         btnScript = findViewById(R.id.btn_script)
         cbFullMode = findViewById(R.id.cb_full_mode)
+        cbMock = findViewById(R.id.cb_mock)
         btnHistory = findViewById(R.id.btn_history)
 
         btnHistory.setOnClickListener { showHistory() }
         tvStatus = findViewById(R.id.tv_status)
         tvPrompt = findViewById(R.id.tv_prompt)
-        etUrl = findViewById(R.id.et_server_url)
 
         // Версия из build.gradle (versionName)
         val version = packageManager.getPackageInfo(packageName, 0).versionName
         val tvVersion = findViewById<TextView>(R.id.tv_version)
         tvVersion.text = "v$version"
-
-        // Дефолтный URL
-        etUrl.setText("10.47.183.102:35000")
 
         registerReceiver(statusReceiver, IntentFilter(ElmForwardService.BROADCAST_STATUS),
             ContextCompat.RECEIVER_NOT_EXPORTED)
@@ -83,17 +81,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startTest() {
-        val url = etUrl.text.toString().trim()
-
         val intent = Intent(this, TestService::class.java).apply {
             action = TestService.ACTION_RUN
-            if (url.contains(":")) {
-                // TCP-режим (mock): IP:port
-                val parts = url.split(":")
-                putExtra("host", parts[0])
-                putExtra("port", parts.getOrNull(1)?.toIntOrNull() ?: 35000)
+            if (cbMock.isChecked) {
+                putExtra("host", MOCK_HOST)
+                putExtra("port", MOCK_PORT)
             }
-            // если поле пустое → BT-режим (host = null)
         }
         startService(intent)
 
@@ -116,18 +109,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startScript() {
-        val url = etUrl.text.toString().trim()
-
+        val mode = if (cbFullMode.isChecked) "full" else "test"
         val intent = Intent(this, ScriptRunnerService::class.java).apply {
             action = ScriptRunnerService.ACTION_RUN
-            val mode = if (cbFullMode.isChecked) "full" else "test"
-            if (url.contains(":") && !url.startsWith("http")) {
-                val parts = url.split(":")
-                putExtra(ScriptRunnerService.EXTRA_DEBUG_HOST, "${parts[0]}:${parts.getOrNull(1) ?: "35000"}")
-                putExtra(ScriptRunnerService.EXTRA_SERVER_URL, "http://${parts[0]}:5005")
-                putExtra(ScriptRunnerService.EXTRA_SCRIPT_URL, "http://${parts[0]}:5005/api/v1/script?mode=$mode")
-            } else {
-                putExtra(ScriptRunnerService.EXTRA_SCRIPT_URL, "https://obdai.ru/api/v1/script?mode=$mode")
+            putExtra(ScriptRunnerService.EXTRA_SCRIPT_URL, "https://obdai.ru/api/v1/script?mode=$mode")
+            if (cbMock.isChecked) {
+                putExtra(ScriptRunnerService.EXTRA_DEBUG_HOST, "$MOCK_HOST:$MOCK_PORT")
             }
         }
         ContextCompat.startForegroundService(this, intent)

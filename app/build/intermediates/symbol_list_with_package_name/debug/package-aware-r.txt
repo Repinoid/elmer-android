@@ -705,12 +705,12 @@ id async
 id beginning
 id blocking
 id bottom
-id btn_connect
 id btn_history
 id btn_script
 id btn_test
 id buttonPanel
 id cb_full_mode
+id cb_mock
 id center_vertical
 id checkbox
 id checked
@@ -727,7 +727,6 @@ id disableHome
 id edit_query
 id edit_text_id
 id end
-id et_server_url
 id expand_activities_button
 id expanded_menu
 id forever

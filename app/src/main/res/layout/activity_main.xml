@@ -11,7 +11,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="🔧 Elmer"
+        android:text="🔧 elmAI"
         android:textSize="32sp"
         android:textColor="#ff6b35"
         android:layout_marginTop="40dp"
@@ -33,20 +33,6 @@
         android:textSize="11sp"
         android:textColor="#555"
         android:layout_marginBottom="8dp" />
-
-    <EditText
-        android:id="@+id/et_server_url"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="IP:port (mock) или пусто (BT)"
-        android:text="10.47.183.102:35000"
-        android:textColor="#e0e0e0"
-        android:textColorHint="#666666"
-        android:textSize="14sp"
-        android:padding="12dp"
-        android:background="@drawable/edit_bg"
-        android:layout_marginBottom="12dp"
-        android:inputType="textUri" />
 
     <Button
         android:id="@+id/btn_test"
@@ -85,7 +71,7 @@
         android:id="@+id/btn_script"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="📋 СКРИПТ (офлайн + загрузка)"
+        android:text="� ДИАГНОСТИКА"
         android:textSize="14sp"
         android:textColor="#ffffff"
         android:backgroundTint="#2196F3"
@@ -125,5 +111,17 @@
             android:padding="8dp" />
 
     </ScrollView>
+
+    <CheckBox
+        android:id="@+id/cb_mock"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="mock"
+        android:textSize="10sp"
+        android:textColor="#444444"
+        android:buttonTint="#444444"
+        android:checked="false"
+        android:layout_gravity="end"
+        android:layout_marginTop="4dp" />
 
 </LinearLayout>

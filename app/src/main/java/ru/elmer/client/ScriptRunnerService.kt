@@ -9,7 +9,9 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import android.content.Intent
+import android.os.Build
 import android.os.IBinder
+import android.provider.Settings
 import android.util.Log
 import org.json.JSONObject
 import java.io.IOException
@@ -36,6 +38,16 @@ class ScriptRunnerService : Service() {
     @Volatile private var paused = false
     private lateinit var db: SessionDb
     private var sessionId: Long = -1
+    private var startTime: Long = 0
+    private var elmMac: String = ""
+    private var elmBtName: String = ""
+    private var obdProtocol: String = ""
+    private var transport: String = ""
+    private var mockMode: Boolean = false
+    private var errorCount: Int = 0
+    private var retryCount: Int = 0
+    private var timeoutCount: Int = 0
+    private var scriptMode: String = ""
 
     companion object {
         const val TAG = "ElmerScript"
@@ -100,6 +112,12 @@ class ScriptRunnerService : Service() {
         serverUrl = intent.getStringExtra(EXTRA_SERVER_URL) ?: "https://obdai.ru"
         val debugHost = intent.getStringExtra(EXTRA_DEBUG_HOST)
 
+        // Режим
+        scriptMode = if (scriptUrl.contains("full")) "full" else "test"
+        mockMode = debugHost != null
+        transport = if (mockMode) "tcp" else "bt"
+        startTime = System.currentTimeMillis()
+
         startForeground(NOTIFY_ID, buildNotification())
         running = true
 
@@ -115,23 +133,26 @@ class ScriptRunnerService : Service() {
 
     private fun connectTcp(host: String, port: Int) {
         logHeader("TCP $host:$port")
+        transport = "tcp"; mockMode = true
         try {
             tcpSocket = Socket(host, port).also { it.soTimeout = 3000 }
             elm = ElmProtocol(tcpSocket!!.inputStream, tcpSocket!!.outputStream)
             log("✅ TCP OK")
-        } catch (e: Exception) { log("❌ TCP: ${e.message}"); done("Ошибка"); return }
+        } catch (e: Exception) { log("❌ TCP: ${e.message}"); errorCount++; done("Ошибка"); return }
         executeScript()
     }
 
     private fun connectBt() {
         logHeader("Bluetooth")
+        transport = "bt"; mockMode = false
         val a = BluetoothAdapter.getDefaultAdapter()
-        if (a == null) { log("❌ Нет BT"); done(""); return }
+        if (a == null) { log("❌ Нет BT"); errorCount++; done(""); return }
         val dev = a.bondedDevices.find {
             it.name.uppercase().let { n -> n.contains("OBD") || n.contains("ELM") || n.contains("CBT") }
         }
-        if (dev == null) { log("❌ ELM не найден"); done(""); return }
-        log("   Найден: ${dev.name}"); log("⏳ Подключение...")
+        if (dev == null) { log("❌ ELM не найден"); errorCount++; done(""); return }
+        elmMac = dev.address; elmBtName = dev.name
+        log("   Найден: ${dev.name} (${dev.address})"); log("⏳ Подключение...")
         try {
             btSocket = connectBtSocket(dev, a)
             Thread.sleep(500)
@@ -182,7 +203,9 @@ class ScriptRunnerService : Service() {
         if (ok) {
             log("📤 Отправка на сервер...")
             sendBroadcast(Intent(BROADCAST_STAGE).apply { putExtra("stage", "upload"); putExtra("detail", "Отправка данных..."); setPackage(packageName) })
-            val resp = client.uploadSession(sessionId, db.getResponses(sessionId))
+
+            val clientInfo = buildClientInfo()
+            val resp = client.uploadSession(sessionId, db.getResponses(sessionId), clientInfo)
             if (resp != null) {
                 sendBroadcast(Intent(BROADCAST_STAGE).apply { putExtra("stage", "llm"); putExtra("detail", "LLM анализ..."); setPackage(packageName) })
                 val d = resp.optString("diagnosis", "")
@@ -197,6 +220,44 @@ class ScriptRunnerService : Service() {
             } else log("⚠️ Сервер недоступен. Данные сохранены.")
         }
         done(if (ok) "✅ Завершено" else "⏹ Прервано")
+    }
+
+    // ── Client info ──────────────────────────────────────
+
+    private fun buildClientInfo(): Map<String, String> {
+        val info = mutableMapOf<String, String>()
+
+        // Телефон
+        info["phone_model"] = Build.MODEL
+        info["phone_maker"] = Build.MANUFACTURER
+        info["android_version"] = Build.VERSION.RELEASE
+        info["android_sdk"] = Build.VERSION.SDK_INT.toString()
+
+        // Версия приложения
+        try {
+            info["app_version"] = packageManager.getPackageInfo(packageName, 0).versionName
+        } catch (_: Exception) {}
+
+        // Android ID (уникальный ID устройства)
+        try {
+            info["android_id"] = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+        } catch (_: Exception) {}
+
+        // ELM327
+        info["elm_mac"] = elmMac
+        info["elm_bt_name"] = elmBtName
+        info["obd_protocol"] = obdProtocol
+
+        // Сессия
+        info["duration_ms"] = (System.currentTimeMillis() - startTime).toString()
+        info["error_count"] = errorCount.toString()
+        info["retry_count"] = retryCount.toString()
+        info["timeout_count"] = timeoutCount.toString()
+        info["script_mode"] = scriptMode
+        info["transport"] = transport
+        info["mock_mode"] = if (mockMode) "1" else "0"
+
+        return info
     }
 
     // ── Helpers ─────────────────────────────────────────
@@ -223,7 +284,7 @@ class ScriptRunnerService : Service() {
     private fun createNotificationChannel() {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             getSystemService(NotificationManager::class.java)
-                .createNotificationChannel(NotificationChannel(CHANNEL_ID, "Elmer Script", NotificationManager.IMPORTANCE_LOW))
+                .createNotificationChannel(NotificationChannel(CHANNEL_ID, "elmAI Script", NotificationManager.IMPORTANCE_LOW))
         }
     }
     private fun buildNotification(): Notification {
@@ -232,7 +293,7 @@ class ScriptRunnerService : Service() {
         val b = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O)
             Notification.Builder(this, CHANNEL_ID)
         else @Suppress("DEPRECATION") Notification.Builder(this)
-        return b.setContentTitle("Elmer").setContentText("Скрипт...")
+        return b.setContentTitle("elmAI").setContentText("Скрипт...")
             .setSmallIcon(android.R.drawable.ic_dialog_info).setContentIntent(pi).build()
     }
 }
