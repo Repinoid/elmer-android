@@ -4,6 +4,7 @@ drawable edit_bg
 id btn_connect
 id btn_script
 id btn_test
+id cb_full_mode
 id et_server_url
 id tv_prompt
 id tv_status

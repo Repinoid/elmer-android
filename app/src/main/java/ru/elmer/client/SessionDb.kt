@@ -15,7 +15,7 @@ class SessionDb(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_
 
     companion object {
         const val DB_NAME = "elmer_sessions.db"
-        const val DB_VERSION = 1
+        const val DB_VERSION = 2
     }
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -26,6 +26,7 @@ class SessionDb(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_
                 title       TEXT,
                 created_at  INTEGER NOT NULL DEFAULT (strftime('%s','now')),
                 uploaded    INTEGER NOT NULL DEFAULT 0,
+                diagnosis   TEXT,
                 server_url  TEXT
             )
         """)
@@ -104,6 +105,35 @@ class SessionDb(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_
                 "raw" to cursor.getString(2),
                 "decoded" to cursor.getString(3),
                 "timestamp" to cursor.getString(4),
+            ))
+        }
+        cursor.close()
+        return rows
+    }
+
+    // ── Diagnosis ──────────────────────────────────────
+
+    fun saveDiagnosis(sessionId: Long, diagnosis: String) {
+        writableDatabase.execSQL(
+            "UPDATE sessions SET diagnosis = ? WHERE id = ?",
+            arrayOf(diagnosis, sessionId)
+        )
+    }
+
+    fun getSessions(): List<Map<String, String?>> {
+        val db = readableDatabase
+        val cursor = db.rawQuery(
+            "SELECT id, title, created_at, uploaded, diagnosis FROM sessions ORDER BY id DESC",
+            null
+        )
+        val rows = mutableListOf<Map<String, String?>>()
+        while (cursor.moveToNext()) {
+            rows.add(mapOf(
+                "id" to cursor.getLong(0).toString(),
+                "title" to cursor.getString(1),
+                "created_at" to cursor.getString(2),
+                "uploaded" to cursor.getString(3),
+                "diagnosis" to cursor.getString(4),
             ))
         }
         cursor.close()

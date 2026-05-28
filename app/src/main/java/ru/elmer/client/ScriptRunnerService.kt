@@ -190,6 +190,7 @@ class ScriptRunnerService : Service() {
                     log("══════════════════"); log("🩺 ДИАГНОЗ:")
                     d.chunked(60).forEach { log(it.trim()) }
                     log("══════════════════")
+                    db.saveDiagnosis(sessionId, d)
                 }
                 sendBroadcast(Intent(BROADCAST_STAGE).apply { putExtra("stage", "done"); putExtra("detail", "✅ Готово"); setPackage(packageName) })
                 db.markUploaded(sessionId); log("✅ Загружено")

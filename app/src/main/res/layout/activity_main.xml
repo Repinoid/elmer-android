@@ -71,6 +71,17 @@
         android:layout_marginBottom="4dp" />
 
     <Button
+        android:id="@+id/btn_history"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="📋 ИСТОРИЯ"
+        android:textSize="13sp"
+        android:textColor="#ffffff"
+        android:backgroundTint="#9C27B0"
+        android:padding="10dp"
+        android:layout_marginBottom="8dp" />
+
+    <Button
         android:id="@+id/btn_script"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

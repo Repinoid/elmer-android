@@ -1,7 +1,11 @@
 [
     {
-        "merged": "ru.elmer.client.app-merged_res-20:/drawable_edit_bg.xml.flat",
-        "source": "ru.elmer.client.app-main-22:/drawable/edit_bg.xml"
+        "merged": "/home/naeel/.gradle/daemon/8.7/ru.elmer.client.app-merged_res-20:/drawable_edit_bg.xml.flat",
+        "source": "/home/naeel/.gradle/daemon/8.7/ru.elmer.client.app-main-22:/drawable/edit_bg.xml"
+    },
+    {
+        "merged": "/home/naeel/.gradle/daemon/8.7/ru.elmer.client.app-merged_res-20:/layout_activity_main.xml.flat",
+        "source": "/home/naeel/.gradle/daemon/8.7/ru.elmer.client.app-main-22:/layout/activity_main.xml"
     },
     {
         "merged": "ru.elmer.client.app-merged_res-20:/layout_activity_main.xml.flat",

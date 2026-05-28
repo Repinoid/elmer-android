@@ -25,6 +25,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var btnConnect: Button
     private lateinit var btnScript: Button
+    private lateinit var btnHistory: Button
     private lateinit var cbFullMode: CheckBox
     private lateinit var tvStatus: TextView
     private lateinit var tvPrompt: TextView
@@ -53,6 +54,9 @@ class MainActivity : AppCompatActivity() {
         btnConnect = findViewById(R.id.btn_connect)
         btnScript = findViewById(R.id.btn_script)
         cbFullMode = findViewById(R.id.cb_full_mode)
+        btnHistory = findViewById(R.id.btn_history)
+
+        btnHistory.setOnClickListener { showHistory() }
         tvStatus = findViewById(R.id.tv_status)
         tvPrompt = findViewById(R.id.tv_prompt)
         etUrl = findViewById(R.id.et_server_url)
@@ -265,6 +269,24 @@ class MainActivity : AppCompatActivity() {
         try { unregisterReceiver(testReceiver) } catch (_: Exception) {}
         try { unregisterReceiver(scriptStatusReceiver) } catch (_: Exception) {}
         try { unregisterReceiver(scriptPromptReceiver) } catch (_: Exception) {}
+        try { unregisterReceiver(scriptStageReceiver) } catch (_: Exception) {}
         super.onDestroy()
+    }
+
+    // ── История ──────────────────────────────────────────
+
+    private fun showHistory() {
+        val db = SessionDb(this)
+        val sessions = db.getSessions()
+        if (sessions.isEmpty()) { tvStatus.text = "📋 История пуста"; return }
+        val items = sessions.mapIndexed { i, s ->
+            val dt = s["created_at"]?.let {
+                java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.getDefault())
+                    .format(java.util.Date(it.toLong() * 1000))
+            } ?: "?"
+            val diag = (s["diagnosis"] ?: "ожидает...").take(80)
+            "${i+1}. [$dt] ${s["title"] ?: "Диагностика"}\n$diag\n"
+        }.joinToString("\n")
+        tvStatus.text = items
     }
 }
