@@ -96,8 +96,8 @@ class ScriptRunnerService : Service() {
     private fun startRun(intent: Intent) {
         scriptUrl = intent.getStringExtra(EXTRA_SCRIPT_URL)
             ?: intent.getStringExtra(EXTRA_SERVER_URL)?.let { "$it/api/v1/script" }
-            ?: "http://10.47.183.102:5005/api/v1/script"
-        serverUrl = intent.getStringExtra(EXTRA_SERVER_URL) ?: "http://10.47.183.102:5005"
+            ?: "https://obdai.ru/api/v1/script"
+        serverUrl = intent.getStringExtra(EXTRA_SERVER_URL) ?: "https://obdai.ru"
         val debugHost = intent.getStringExtra(EXTRA_DEBUG_HOST)
 
         startForeground(NOTIFY_ID, buildNotification())
