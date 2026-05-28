@@ -1,0 +1,22 @@
+R_DEF: Internal format may change without notice
+local
+drawable edit_bg
+id btn_connect
+id btn_script
+id btn_test
+id et_server_url
+id tv_prompt
+id tv_status
+id tv_version
+layout activity_main
+string app_name
+string btn_diagnose
+string connecting
+string done
+string error_bt
+string error_server
+string reading
+string sending
+string server_url_default
+string server_url_hint
+style Theme.Elmer

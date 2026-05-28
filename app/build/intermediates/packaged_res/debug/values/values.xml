@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Elmer</string>
+    <string name="btn_diagnose">🚗 Диагностировать</string>
+    <string name="connecting">Подключение к ELM327…</string>
+    <string name="done">✅ Готово</string>
+    <string name="error_bt">❌ Ошибка Bluetooth</string>
+    <string name="error_server">❌ Ошибка сервера</string>
+    <string name="reading">Чтение данных ЭБУ…</string>
+    <string name="sending">Отправка на сервер…</string>
+    <string name="server_url_default">https://obdai.ru/api/diagnose</string>
+    <string name="server_url_hint">URL сервера</string>
+    <style name="Theme.Elmer" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="colorPrimary">#ff6b35</item>
+        <item name="colorPrimaryDark">#1a1a2e</item>
+        <item name="colorAccent">#4ecca3</item>
+        <item name="android:windowBackground">#1a1a2e</item>
+        <item name="android:textColor">#e0e0e0</item>
+    </style>
+</resources>

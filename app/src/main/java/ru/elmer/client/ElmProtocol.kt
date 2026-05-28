@@ -45,17 +45,17 @@ class ElmProtocol(
 
     // ── Инициализация (AndrOBD ElmProt.initialize) ─────────
 
-    /** ATSP0→ATAT1→ATS0→ATL0→ATE0. Без ATZ! */
+    /** ATSP0→ATAT1→ATS0→ATL0→ATE0. Каждая команда с чтением ответа. */
     fun init() {
         Log.i(TAG, "init start")
 
-        sendRaw("ATSP0");  Thread.sleep(200)
-        sendRaw("ATAT1");  updateTimeout(); Thread.sleep(200)
-        sendRaw("ATS0");   Thread.sleep(100)
-        sendRaw("ATL0");   Thread.sleep(100)
-        sendRaw("ATE0");   Thread.sleep(100)
+        sendCommand("ATSP0")  // авто-протокол (может быть SEARCHING...)
+        sendCommand("ATAT1")  // adaptive timing
+        updateTimeout()
+        sendCommand("ATS0")   // пробелы выкл
+        sendCommand("ATL0")   // line feeds выкл
+        sendCommand("ATE0")   // эхо выкл
 
-        drain()
         Log.i(TAG, "init done")
     }
 
