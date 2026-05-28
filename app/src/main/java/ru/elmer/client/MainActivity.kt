@@ -190,8 +190,8 @@ class MainActivity : AppCompatActivity() {
 
         tvStatus.text = ""
         tvPrompt.visibility = android.view.View.GONE
-        tvStatus.text = "⏳ Скрипт..."
-
+        tvStatus.text = "⏳ Инициализация ELM327..."
+        scriptStartTime = System.currentTimeMillis()
         registerScriptReceiver()
     }
 
@@ -201,9 +201,28 @@ class MainActivity : AppCompatActivity() {
         registerReceiver(scriptStatusReceiver,
             IntentFilter(ScriptRunnerService.BROADCAST_STATUS),
             ContextCompat.RECEIVER_NOT_EXPORTED)
-        registerReceiver(scriptPromptReceiver,
-            IntentFilter(ScriptRunnerService.BROADCAST_PROMPT),
+        registerReceiver(scriptStageReceiver,
+            IntentFilter(ScriptRunnerService.BROADCAST_STAGE),
             ContextCompat.RECEIVER_NOT_EXPORTED)
+    }
+
+    private var scriptStartTime: Long = 0
+
+    private val scriptStageReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val stage = intent?.getStringExtra("stage") ?: return
+            val detail = intent.getStringExtra("detail") ?: ""
+            val elapsed = if (scriptStartTime > 0)
+                " [${(System.currentTimeMillis() - scriptStartTime) / 1000}с]"
+            else ""
+            when (stage) {
+                "ecu" -> tvStatus.text = "🔌 Соединение с ЭБУ...$elapsed"
+                "upload" -> tvStatus.text = "📤 Отправка на сервер...$elapsed"
+                "llm" -> tvStatus.text = "🧠 LLM анализ...$elapsed"
+                "done" -> tvStatus.text = "✅ Завершено$elapsed"
+                else -> tvStatus.text = "📡 $detail$elapsed"
+            }
+        }
     }
 
     private val scriptStatusReceiver = object : BroadcastReceiver() {

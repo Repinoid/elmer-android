@@ -49,6 +49,7 @@ class ScriptRunnerService : Service() {
         const val EXTRA_DEBUG_HOST = "debug_host"
         const val BROADCAST_STATUS = "ru.elmer.client.SCRIPT_STATUS"
         const val BROADCAST_PROMPT = "ru.elmer.client.SCRIPT_PROMPT"
+        const val BROADCAST_STAGE  = "ru.elmer.client.SCRIPT_STAGE"
 
         val DEFAULT_SCRIPT = """
 {
@@ -169,10 +170,9 @@ class ScriptRunnerService : Service() {
 
         val engine = ScriptEngine(
             sendCommand = { try { elm?.sendCommand(it) ?: "(no elm)" } catch (e: Exception) { "(err)" } },
-            onPrompt = { text ->
-                sendBroadcast(Intent(BROADCAST_PROMPT).apply { putExtra("prompt", text); setPackage(packageName) })
+            onStage = { stage, detail ->
+                sendBroadcast(Intent(BROADCAST_STAGE).apply { putExtra("stage", stage); putExtra("detail", detail); setPackage(packageName) })
             },
-            waitForResume = { paused = true; while (paused && running) Thread.sleep(500); running },
             onResult = { sid, cmd, raw, dec -> db.addResponse(sessionId, sid, cmd, raw, dec) },
             onLog = { log(it) }
         )
@@ -180,15 +180,18 @@ class ScriptRunnerService : Service() {
         val ok = engine.run(scriptJson)
 
         if (ok) {
-            log("📤 Загрузка на сервер...")
+            log("📤 Отправка на сервер...")
+            sendBroadcast(Intent(BROADCAST_STAGE).apply { putExtra("stage", "upload"); putExtra("detail", "Отправка данных..."); setPackage(packageName) })
             val resp = client.uploadSession(sessionId, db.getResponses(sessionId))
             if (resp != null) {
+                sendBroadcast(Intent(BROADCAST_STAGE).apply { putExtra("stage", "llm"); putExtra("detail", "LLM анализ..."); setPackage(packageName) })
                 val d = resp.optString("diagnosis", "")
                 if (d.isNotEmpty()) {
                     log("══════════════════"); log("🩺 ДИАГНОЗ:")
                     d.chunked(60).forEach { log(it.trim()) }
                     log("══════════════════")
                 }
+                sendBroadcast(Intent(BROADCAST_STAGE).apply { putExtra("stage", "done"); putExtra("detail", "✅ Готово"); setPackage(packageName) })
                 db.markUploaded(sessionId); log("✅ Загружено")
             } else log("⚠️ Сервер недоступен. Данные сохранены.")
         }
