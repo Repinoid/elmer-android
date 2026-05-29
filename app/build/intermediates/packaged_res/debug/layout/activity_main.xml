@@ -11,7 +11,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="🔧 Elmer"
+        android:text="🔧 elmAI"
         android:textSize="32sp"
         android:textColor="#ff6b35"
         android:layout_marginTop="40dp"
@@ -38,7 +38,7 @@
         android:id="@+id/btn_test"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="🧪 ТЕСТ (всё локально)"
+        android:text="🧪 ТЕСТ СЕРВЕРА"
         android:textSize="16sp"
         android:textColor="#ffffff"
         android:backgroundTint="#4CAF50"
@@ -112,16 +112,5 @@
 
     </ScrollView>
 
-    <CheckBox
-        android:id="@+id/cb_mock"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="mock"
-        android:textSize="10sp"
-        android:textColor="#444444"
-        android:buttonTint="#444444"
-        android:checked="false"
-        android:layout_gravity="end"
-        android:layout_marginTop="4dp" />
 
 </LinearLayout>

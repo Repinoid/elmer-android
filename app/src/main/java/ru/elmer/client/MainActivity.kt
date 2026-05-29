@@ -15,6 +15,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import kotlin.concurrent.thread
 
 /**
  * Тонкий клиент Elmer — одна кнопка.
@@ -25,7 +26,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnScript: Button
     private lateinit var btnHistory: Button
     private lateinit var cbFullMode: CheckBox
-    private lateinit var cbMock: CheckBox
     private lateinit var tvStatus: TextView
     private lateinit var tvPrompt: TextView
 
@@ -36,8 +36,6 @@ class MainActivity : AppCompatActivity() {
     companion object {
         const val REQUEST_BT_PERMISSIONS = 1
         const val REQUEST_ENABLE_BT = 2
-        const val MOCK_HOST = "10.47.183.102"
-        const val MOCK_PORT = 35000
     }
 
     private val statusReceiver = object : BroadcastReceiver() {
@@ -53,7 +51,6 @@ class MainActivity : AppCompatActivity() {
 
         btnScript = findViewById(R.id.btn_script)
         cbFullMode = findViewById(R.id.cb_full_mode)
-        cbMock = findViewById(R.id.cb_mock)
         btnHistory = findViewById(R.id.btn_history)
 
         btnHistory.setOnClickListener { showHistory() }
@@ -81,14 +78,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startTest() {
-        val intent = Intent(this, TestService::class.java).apply {
-            action = TestService.ACTION_RUN
-            if (cbMock.isChecked) {
-                putExtra("host", MOCK_HOST)
-                putExtra("port", MOCK_PORT)
+        // Тест сервера — без ELM, просто проверка доступности
+        thread(name = "ServerTest", isDaemon = true) {
+            runOnUiThread { tvStatus.text = "⏳ Проверка сервера..." }
+            try {
+                val url = java.net.URL("https://obdai.ru/api/v1/script?mode=test")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                val code = conn.responseCode
+                runOnUiThread {
+                    tvStatus.text = if (code == 200) "✅ Сервер доступен (HTTP $code)"
+                    else "⚠️ Сервер ответил: HTTP $code"
+                }
+                conn.disconnect()
+            } catch (e: Exception) {
+                runOnUiThread { tvStatus.text = "❌ Сервер недоступен: ${e.message}" }
             }
         }
-        startService(intent)
 
         // Очищаем экран
         tvStatus.text = ""
@@ -113,9 +120,6 @@ class MainActivity : AppCompatActivity() {
         val intent = Intent(this, ScriptRunnerService::class.java).apply {
             action = ScriptRunnerService.ACTION_RUN
             putExtra(ScriptRunnerService.EXTRA_SCRIPT_URL, "https://obdai.ru/api/v1/script?mode=$mode")
-            if (cbMock.isChecked) {
-                putExtra(ScriptRunnerService.EXTRA_DEBUG_HOST, "$MOCK_HOST:$MOCK_PORT")
-            }
         }
         ContextCompat.startForegroundService(this, intent)
 

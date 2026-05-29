@@ -710,7 +710,6 @@ id btn_script
 id btn_test
 id buttonPanel
 id cb_full_mode
-id cb_mock
 id center_vertical
 id checkbox
 id checked

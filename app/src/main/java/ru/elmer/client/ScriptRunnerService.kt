@@ -15,7 +15,6 @@ import android.provider.Settings
 import android.util.Log
 import org.json.JSONObject
 import java.io.IOException
-import java.net.Socket
 import java.util.UUID
 import kotlin.concurrent.thread
 
@@ -30,7 +29,6 @@ import kotlin.concurrent.thread
 class ScriptRunnerService : Service() {
 
     private var btSocket: BluetoothSocket? = null
-    private var tcpSocket: Socket? = null
     private var elm: ElmProtocol? = null
     private var serverUrl: String = ""
     private var scriptUrl: String = ""
@@ -42,8 +40,6 @@ class ScriptRunnerService : Service() {
     private var elmMac: String = ""
     private var elmBtName: String = ""
     private var obdProtocol: String = ""
-    private var transport: String = ""
-    private var mockMode: Boolean = false
     private var errorCount: Int = 0
     private var retryCount: Int = 0
     private var timeoutCount: Int = 0
@@ -110,41 +106,20 @@ class ScriptRunnerService : Service() {
             ?: intent.getStringExtra(EXTRA_SERVER_URL)?.let { "$it/api/v1/script" }
             ?: "https://obdai.ru/api/v1/script"
         serverUrl = intent.getStringExtra(EXTRA_SERVER_URL) ?: "https://obdai.ru"
-        val debugHost = intent.getStringExtra(EXTRA_DEBUG_HOST)
 
-        // Режим
         scriptMode = if (scriptUrl.contains("full")) "full" else "test"
-        mockMode = debugHost != null
-        transport = if (mockMode) "tcp" else "bt"
         startTime = System.currentTimeMillis()
 
         startForeground(NOTIFY_ID, buildNotification())
         running = true
 
-        thread(name = "ScriptRunner", isDaemon = true) {
-            if (debugHost != null) {
-                val p = debugHost.split(":")
-                connectTcp(p[0], p.getOrNull(1)?.toIntOrNull() ?: 35000)
-            } else connectBt()
-        }
+        thread(name = "ScriptRunner", isDaemon = true) { connectBt() }
     }
 
     // ── Connect ─────────────────────────────────────────
 
-    private fun connectTcp(host: String, port: Int) {
-        logHeader("TCP $host:$port")
-        transport = "tcp"; mockMode = true
-        try {
-            tcpSocket = Socket(host, port).also { it.soTimeout = 3000 }
-            elm = ElmProtocol(tcpSocket!!.inputStream, tcpSocket!!.outputStream)
-            log("✅ TCP OK")
-        } catch (e: Exception) { log("❌ TCP: ${e.message}"); errorCount++; done("Ошибка"); return }
-        executeScript()
-    }
-
     private fun connectBt() {
         logHeader("Bluetooth")
-        transport = "bt"; mockMode = false
         val a = BluetoothAdapter.getDefaultAdapter()
         if (a == null) { log("❌ Нет BT"); errorCount++; done(""); return }
         val dev = a.bondedDevices.find {
@@ -201,21 +176,37 @@ class ScriptRunnerService : Service() {
         val ok = engine.run(scriptJson)
 
         if (ok) {
-            log("📤 Отправка на сервер...")
-            sendBroadcast(Intent(BROADCAST_STAGE).apply { putExtra("stage", "upload"); putExtra("detail", "Отправка данных..."); setPackage(packageName) })
+            val responses = db.getResponses(sessionId)
+            val count = responses.size
+            log("📤 Отправка $count ответов на сервер...")
+            sendBroadcast(Intent(BROADCAST_STAGE).apply {
+                putExtra("stage", "upload"); putExtra("detail", "Отправка $count ответов..."); setPackage(packageName)
+            })
 
             val clientInfo = buildClientInfo()
-            val resp = client.uploadSession(sessionId, db.getResponses(sessionId), clientInfo)
+            val resp = client.uploadSession(sessionId, responses, clientInfo)
             if (resp != null) {
-                sendBroadcast(Intent(BROADCAST_STAGE).apply { putExtra("stage", "llm"); putExtra("detail", "LLM анализ..."); setPackage(packageName) })
+                val llmOk = resp.optBoolean("llm_success", false)
+                val llmAvail = resp.optBoolean("llm_available", false)
+
+                if (llmOk) {
+                    sendBroadcast(Intent(BROADCAST_STAGE).apply { putExtra("stage", "llm"); putExtra("detail", "🧠 LLM анализ..."); setPackage(packageName) })
+                }
+
                 val d = resp.optString("diagnosis", "")
                 if (d.isNotEmpty()) {
-                    log("══════════════════"); log("🩺 ДИАГНОЗ:")
+                    log("══════════════════")
+                    if (llmOk) log("🩺 ДИАГНОЗ (LLM):")
+                    else if (llmAvail) log("⚠️ LLM ответил с ошибкой:")
+                    else log("📋 КОДЫ ОШИБОК (LLM недоступен):")
                     d.chunked(60).forEach { log(it.trim()) }
                     log("══════════════════")
                     db.saveDiagnosis(sessionId, d)
                 }
-                sendBroadcast(Intent(BROADCAST_STAGE).apply { putExtra("stage", "done"); putExtra("detail", "✅ Готово"); setPackage(packageName) })
+                val status = if (llmOk) "✅ Готово (LLM)"
+                             else if (llmAvail) "⚠️ LLM ошибка, коды готовы"
+                             else "📋 Коды готовы (LLM выкл)"
+                sendBroadcast(Intent(BROADCAST_STAGE).apply { putExtra("stage", "done"); putExtra("detail", status); setPackage(packageName) })
                 db.markUploaded(sessionId); log("✅ Загружено")
             } else log("⚠️ Сервер недоступен. Данные сохранены.")
         }
@@ -254,8 +245,7 @@ class ScriptRunnerService : Service() {
         info["retry_count"] = retryCount.toString()
         info["timeout_count"] = timeoutCount.toString()
         info["script_mode"] = scriptMode
-        info["transport"] = transport
-        info["mock_mode"] = if (mockMode) "1" else "0"
+        info["transport"] = "bt"
 
         return info
     }
@@ -276,7 +266,6 @@ class ScriptRunnerService : Service() {
     private fun disconnect() {
         running = false
         try { btSocket?.close() } catch (_: Exception) {}
-        try { tcpSocket?.close() } catch (_: Exception) {}
         stopForeground(STOP_FOREGROUND_REMOVE)
     }
     override fun onDestroy() { disconnect(); super.onDestroy() }
