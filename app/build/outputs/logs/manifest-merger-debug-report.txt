@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:2:1-45:12
-INJECTED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:2:1-45:12
-INJECTED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:2:1-45:12
-INJECTED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:2:1-45:12
+ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:2:1-35:12
+INJECTED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:2:1-35:12
+INJECTED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:2:1-35:12
+INJECTED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:2:1-35:12
 MERGED from [androidx.appcompat:appcompat-resources:1.6.1] /home/naeel/.gradle/caches/transforms-4/38e148c4bad64d7e0053521e4f9796de/transformed/appcompat-resources-1.6.1/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.appcompat:appcompat:1.6.1] /home/naeel/.gradle/caches/transforms-4/7ff09a513888b55c4361eba8eb56767b/transformed/appcompat-1.6.1/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.fragment:fragment:1.3.6] /home/naeel/.gradle/caches/transforms-4/a98bb3cf8e4e24c46d302b1c67e8651e/transformed/fragment-1.3.6/AndroidManifest.xml:17:1-24:12
@@ -73,8 +73,8 @@ ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:12:5-87
 	android:name
 		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:12:22-84
 application
-ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:14:5-44:19
-INJECTED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:14:5-44:19
+ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:14:5-34:19
+INJECTED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:14:5-34:19
 MERGED from [androidx.emoji2:emoji2:1.2.0] /home/naeel/.gradle/caches/transforms-4/765bb4724e33cbc7ff5b20c239800dfc/transformed/emoji2-1.2.0/AndroidManifest.xml:23:5-33:19
 MERGED from [androidx.emoji2:emoji2:1.2.0] /home/naeel/.gradle/caches/transforms-4/765bb4724e33cbc7ff5b20c239800dfc/transformed/emoji2-1.2.0/AndroidManifest.xml:23:5-33:19
 MERGED from [androidx.core:core:1.12.0] /home/naeel/.gradle/caches/transforms-4/a21dd83138a7111830e110a63a2ae66a/transformed/core-1.12.0/AndroidManifest.xml:28:5-89
@@ -96,49 +96,33 @@ MERGED from [androidx.startup:startup-runtime:1.1.1] /home/naeel/.gradle/caches/
 	android:allowBackup
 		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:15:9-35
 	android:theme
-		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:19:9-43
-	android:usesCleartextTraffic
-		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:18:9-44
-service#ru.elmer.client.ElmForwardService
-ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:21:9-24:40
+		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:18:9-43
+service#ru.elmer.client.script.ScriptRunnerService
+ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:20:9-23:40
 	android:exported
-		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:24:13-37
+		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:23:13-37
 	android:foregroundServiceType
-		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:23:13-53
+		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:22:13-53
 	android:name
-		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:22:13-46
-service#ru.elmer.client.TestService
-ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:26:9-28:40
-	android:exported
-		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:28:13-37
-	android:name
-		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:27:13-40
-service#ru.elmer.client.ScriptRunnerService
-ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:30:9-33:40
-	android:exported
-		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:33:13-37
-	android:foregroundServiceType
-		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:32:13-53
-	android:name
-		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:31:13-48
-activity#ru.elmer.client.MainActivity
-ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:35:9-43:20
+		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:21:13-55
+activity#ru.elmer.client.ui.MainActivity
+ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:25:9-33:20
 	android:windowSoftInputMode
-		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:38:13-55
+		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:28:13-55
 	android:exported
-		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:37:13-36
+		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:27:13-36
 	android:name
-		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:36:13-41
+		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:26:13-44
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:39:13-42:29
+ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:29:13-32:29
 action#android.intent.action.MAIN
-ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:40:17-69
+ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:30:17-69
 	android:name
-		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:40:25-66
+		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:30:25-66
 category#android.intent.category.LAUNCHER
-ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:41:17-77
+ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:31:17-77
 	android:name
-		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:41:27-74
+		ADDED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml:31:27-74
 uses-sdk
 INJECTED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from /home/naeel/elmer-android/app/src/main/AndroidManifest.xml

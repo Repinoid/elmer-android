@@ -15,25 +15,15 @@
         android:allowBackup="true"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.Elmer">
 
         <service
-            android:name=".ElmForwardService"
-            android:foregroundServiceType="dataSync"
-            android:exported="false" />
-
-        <service
-            android:name=".TestService"
-            android:exported="false" />
-
-        <service
-            android:name=".ScriptRunnerService"
+            android:name=".script.ScriptRunnerService"
             android:foregroundServiceType="dataSync"
             android:exported="false" />
 
         <activity
-            android:name=".MainActivity"
+            android:name=".ui.MainActivity"
             android:exported="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

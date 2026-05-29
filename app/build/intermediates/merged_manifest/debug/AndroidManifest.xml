@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="ru.elmer.client"
-    android:versionCode="28"
-    android:versionName="0.27.0-dev" >
+    android:versionCode="31"
+    android:versionName="0.30.0-dev" >
 
     <uses-sdk
         android:minSdkVersion="24"
@@ -31,22 +31,14 @@
         android:extractNativeLibs="false"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Elmer"
-        android:usesCleartextTraffic="true" >
+        android:theme="@style/Theme.Elmer" >
         <service
-            android:name="ru.elmer.client.ElmForwardService"
-            android:exported="false"
-            android:foregroundServiceType="dataSync" />
-        <service
-            android:name="ru.elmer.client.TestService"
-            android:exported="false" />
-        <service
-            android:name="ru.elmer.client.ScriptRunnerService"
+            android:name="ru.elmer.client.script.ScriptRunnerService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
         <activity
-            android:name="ru.elmer.client.MainActivity"
+            android:name="ru.elmer.client.ui.MainActivity"
             android:exported="true"
             android:windowSoftInputMode="adjustResize" >
             <intent-filter>
