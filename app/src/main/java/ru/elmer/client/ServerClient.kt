@@ -25,8 +25,9 @@ class ServerClient(
     }
 
     private val http = OkHttpClient.Builder()
-        .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-        .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+        .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(180, java.util.concurrent.TimeUnit.SECONDS)
+        .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
         .build()
 
     /** Скачивает скрипт с сервера. При ошибке — fallback. */
@@ -70,18 +71,27 @@ class ServerClient(
             })
         }
 
-        return try {
-            val req = Request.Builder()
-                .url("$serverUrl/api/v1/session/upload")
-                .post(json.toString().toRequestBody("application/json".toMediaType()))
-                .build()
-            val resp = http.newCall(req).execute()
-            val body = resp.body?.string() ?: ""
-            resp.close()
-            try { JSONObject(body) } catch (_: Exception) { null }
-        } catch (e: IOException) {
-            Log.w(TAG, "Server unavailable: ${e.message}")
-            null
+        val req = Request.Builder()
+            .url("$serverUrl/api/v1/session/upload")
+            .post(json.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+
+        var lastEx: IOException? = null
+        for (attempt in 1..3) {
+            try {
+                val resp = http.newCall(req).execute()
+                val body = resp.body?.string() ?: ""
+                resp.close()
+                val result = try { JSONObject(body) } catch (_: Exception) { null }
+                if (result != null) return result
+                Log.w(TAG, "Upload attempt $attempt: invalid JSON response")
+            } catch (e: IOException) {
+                lastEx = e
+                Log.w(TAG, "Upload attempt $attempt: ${e.message}")
+                if (attempt < 3) Thread.sleep(2000)
+            }
         }
+        Log.w(TAG, "Server unavailable after 3 attempts: ${lastEx?.message}")
+        return null
     }
 }

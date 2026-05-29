@@ -707,6 +707,7 @@ id blocking
 id bottom
 id btn_history
 id btn_script
+id btn_send
 id btn_test
 id buttonPanel
 id cb_full_mode
@@ -726,6 +727,7 @@ id disableHome
 id edit_query
 id edit_text_id
 id end
+id et_input
 id expand_activities_button
 id expanded_menu
 id forever
@@ -765,6 +767,7 @@ id screen
 id scrollIndicatorDown
 id scrollIndicatorUp
 id scrollView
+id scroll_output
 id search_badge
 id search_bar
 id search_button
