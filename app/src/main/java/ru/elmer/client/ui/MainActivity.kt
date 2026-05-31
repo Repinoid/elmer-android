@@ -307,6 +307,10 @@ class MainActivity : AppCompatActivity() {
             .setItems(items) { _, which ->
                 // Показать полный диагноз
                 tvStatus.text = "📋 ${items[which]}\n\n${diagnoses[which]}"
+                btnClose.setOnClickListener {
+                    btnClose.visibility = android.view.View.GONE
+                    showHistory()
+                }
                 btnClose.visibility = android.view.View.VISIBLE
             }
             .setNegativeButton("Закрыть", null)
