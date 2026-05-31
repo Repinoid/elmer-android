@@ -1,6 +1,7 @@
 R_DEF: Internal format may change without notice
 local
 drawable edit_bg
+id btn_close
 id btn_history
 id btn_script
 id btn_send

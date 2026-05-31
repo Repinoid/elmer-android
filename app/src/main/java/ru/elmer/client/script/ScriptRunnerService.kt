@@ -182,13 +182,16 @@ class ScriptRunnerService : Service() {
         if (ok) {
             val responses = db.getResponses(sessionId)
             val count = responses.size
-            log("📤 Отправка $count ответов на сервер...")
-            sendBroadcast(Intent(BROADCAST_STAGE).apply {
-                putExtra("stage", "upload"); putExtra("detail", "Отправка $count ответов..."); setPackage(packageName)
-            })
 
             val clientInfo = buildClientInfo()
+            // Оценка размера данных: 200 байт на ответ + client_info
+            val dataSizeKB = (count * 200 + 500) / 1024
+            log("📤 Отправка $count ответов (~${dataSizeKB}KB) на сервер...")
+
+            val progress = UploadProgress(this, packageName, count, dataSizeKB)
+            progress.start()
             val resp = client.uploadSession(sessionId, responses, clientInfo)
+            progress.stop()
             if (resp != null) {
                 val llmOk = resp.optBoolean("llm_success", false)
                 val llmAvail = resp.optBoolean("llm_available", false)

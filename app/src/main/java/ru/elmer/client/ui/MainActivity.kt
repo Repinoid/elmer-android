@@ -35,6 +35,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvPrompt: TextView
     private lateinit var etInput: EditText
     private lateinit var btnSend: Button
+    private lateinit var btnClose: Button
     private lateinit var scrollOutput: ScrollView
 
     private val btAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
@@ -67,9 +68,14 @@ class MainActivity : AppCompatActivity() {
         tvPrompt = findViewById(R.id.tv_prompt)
         etInput = findViewById(R.id.et_input)
         btnSend = findViewById(R.id.btn_send)
+        btnClose = findViewById(R.id.btn_close)
         scrollOutput = findViewById(R.id.scroll_output)
 
         btnSend.setOnClickListener { sendToLlm() }
+        btnClose.setOnClickListener {
+            tvStatus.text = "Готов"
+            btnClose.visibility = android.view.View.GONE
+        }
 
         // Версия из build.gradle (versionName)
         val version = packageManager.getPackageInfo(packageName, 0).versionName
@@ -181,11 +187,14 @@ class MainActivity : AppCompatActivity() {
                 " [${(System.currentTimeMillis() - scriptStartTime) / 1000}с]"
             else ""
             when (stage) {
-                "ecu" -> tvStatus.text = "🔌 Соединение с ЭБУ...$elapsed"
-                "upload" -> tvStatus.text = "📤 Отправка на сервер...$elapsed"
-                "llm" -> tvStatus.text = "🧠 LLM анализ...$elapsed"
-                "done" -> tvStatus.text = "✅ Завершено$elapsed"
-                else -> tvStatus.text = "📡 $detail$elapsed"
+                "ecu" -> appendStatus("\n🔌 Соединение с ЭБУ...$elapsed")
+                "upload" -> appendStatus("\n📤 $detail$elapsed")
+                "llm" -> appendStatus("\n🧠 $detail$elapsed")
+                "done" -> {
+                    appendStatus("\n$detail$elapsed")
+                    btnClose.visibility = android.view.View.VISIBLE
+                }
+                else -> appendStatus("\n📡 $detail$elapsed")
             }
         }
     }
@@ -279,21 +288,34 @@ class MainActivity : AppCompatActivity() {
     private fun showHistory() {
         val db = SessionDb(this)
         val sessions = db.getSessions()
-        if (sessions.isEmpty()) { tvStatus.text = "📋 История пуста"; return }
-        val items = sessions.mapIndexed { i, s ->
+        if (sessions.isEmpty()) {
+            tvStatus.text = "📋 История пуста"
+            return
+        }
+
+        // Берём последние 20, формируем список
+        val recent = sessions.take(20)
+        val items = recent.map { s ->
             val dt = s["created_at"]?.let {
                 java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.getDefault())
                     .format(java.util.Date(it.toLong() * 1000))
             } ?: "?"
+            val title = s["title"] ?: "Диагностика"
             val uploaded = s["uploaded"] == "1"
-            val diag = s["diagnosis"]
-            val status = when {
-                uploaded && diag != null -> diag.take(80)
-                uploaded -> "загружено"
-                else -> "⏳ не загружено — данных нет"
+            val prefix = if (uploaded) "✅" else "⏳"
+            "$prefix [$dt] $title"
+        }.toTypedArray()
+
+        val diagnoses = recent.map { s -> s["diagnosis"] ?: "(нет данных)" }
+
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("📋 История (${recent.size})")
+            .setItems(items) { _, which ->
+                // Показать полный диагноз
+                tvStatus.text = "📋 ${items[which]}\n\n${diagnoses[which]}"
+                btnClose.visibility = android.view.View.VISIBLE
             }
-            "${i+1}. [$dt] ${s["title"] ?: "Диагностика"} ${if(uploaded) "✅" else "⏳"}\n$status\n"
-        }.joinToString("\n")
-        tvStatus.text = items
+            .setNegativeButton("Закрыть", null)
+            .show()
     }
 }

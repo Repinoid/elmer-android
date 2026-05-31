@@ -705,6 +705,7 @@ id async
 id beginning
 id blocking
 id bottom
+id btn_close
 id btn_history
 id btn_script
 id btn_send

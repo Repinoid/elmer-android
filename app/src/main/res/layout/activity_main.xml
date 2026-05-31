@@ -117,6 +117,19 @@
 
     </ScrollView>
 
+    <!-- Кнопка закрытия после диагноза -->
+    <Button
+        android:id="@+id/btn_close"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="✕ Закрыть"
+        android:textSize="14sp"
+        android:textColor="#ffffff"
+        android:backgroundTint="#d32f2f"
+        android:padding="10dp"
+        android:visibility="gone"
+        android:layout_marginTop="4dp" />
+
     <!-- Поле ввода + отправить -->
     <LinearLayout
         android:layout_width="match_parent"
