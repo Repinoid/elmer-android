@@ -125,11 +125,28 @@ class ScriptRunnerService : Service() {
     private fun connectBt() {
         logHeader("Bluetooth")
         val a = BluetoothAdapter.getDefaultAdapter()
-        if (a == null) { log("❌ Нет BT"); errorCount++; done(""); return }
+        if (a == null) {
+            log("❌ Bluetooth не поддерживается на этом устройстве")
+            errorDone("Bluetooth отсутствует")
+            return
+        }
         val dev = a.bondedDevices.find {
             it.name.uppercase().let { n -> n.contains("OBD") || n.contains("ELM") || n.contains("CBT") }
         }
-        if (dev == null) { log("❌ ELM не найден"); errorCount++; done(""); return }
+        if (dev == null) {
+            log("❌ ELM327 не найден среди спаренных устройств")
+            log("")
+            log("🔧 Что проверить:")
+            log("  1. Вставлен ли адаптер в OBD-разъём?")
+            log("  2. Горит ли красная лампочка на ELM327?")
+            log("  3. Заведено ли зажигание?")
+            log("  4. Сопряжён ли ELM327 в настройках Bluetooth?")
+            log("  5. На некоторых авто OBD отключается при глушении.")
+            log("")
+            log("⚡ Если адаптер есть, но не виден — перезагрузите телефон.")
+            errorDone("ELM327 не найден")
+            return
+        }
         elmMac = dev.address; elmBtName = dev.name
         log("   Найден: ${dev.name} (${dev.address})"); log("⏳ Подключение...")
         try {
@@ -137,7 +154,12 @@ class ScriptRunnerService : Service() {
             Thread.sleep(500)
             elm = ElmProtocol(btSocket!!.inputStream, btSocket!!.outputStream)
             log("✅ BT OK")
-        } catch (e: Exception) { log("❌ BT: ${e.message}"); done(""); return }
+        } catch (e: Exception) {
+            log("❌ Ошибка подключения: ${e.message}")
+            log("🔧 Попробуйте: перезагрузить телефон, вынуть/вставить ELM327, проверить зажигание.")
+            errorDone("Ошибка подключения")
+            return
+        }
         executeScript()
     }
 
@@ -264,6 +286,13 @@ class ScriptRunnerService : Service() {
     }
     private fun done(msg: String) {
         if (msg.isNotEmpty()) { log("══════════════════"); log(msg); log("══════════════════") }
+        disconnect(); stopSelf()
+    }
+    private fun errorDone(reason: String) {
+        // Посылаем "done" чтобы показать кнопку ✕ Закрыть и не стирать вывод
+        sendBroadcast(Intent(BROADCAST_STAGE).apply {
+            putExtra("stage", "done"); putExtra("detail", "❌ $reason"); setPackage(packageName)
+        })
         disconnect(); stopSelf()
     }
     private fun log(msg: String) {
