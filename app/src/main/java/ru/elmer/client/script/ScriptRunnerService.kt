@@ -26,9 +26,8 @@ import ru.elmer.client.ui.MainActivity
  * Толстый клиент Elmer — сервис для офлайн-диагностики по скрипту.
  *
  * Жизненный цикл:
- *   1. ACTION_RUN → connectBt/connectTcp → ElmProtocol.init() → ScriptEngine.run()
- *   2. ACTION_RESUME → продолжить после паузы (водитель ответил)
- *   3. ACTION_STOP → остановить
+ *   1. ACTION_RUN → connectBt → ElmProtocol.init() → ScriptEngine.run()
+ *   2. ACTION_STOP → остановить
  */
 class ScriptRunnerService : Service() {
 
@@ -37,7 +36,6 @@ class ScriptRunnerService : Service() {
     private var serverUrl: String = ""
     private var scriptUrl: String = ""
     private var running = false
-    @Volatile private var paused = false
     private lateinit var db: SessionDb
     private var sessionId: Long = -1
     private var startTime: Long = 0
@@ -54,7 +52,6 @@ class ScriptRunnerService : Service() {
         const val CHANNEL_ID = "elmer_script"
         const val NOTIFY_ID = 200
         const val ACTION_RUN = "ru.elmer.client.SCRIPT_RUN"
-        const val ACTION_RESUME = "ru.elmer.client.SCRIPT_RESUME"
         const val ACTION_STOP = "ru.elmer.client.SCRIPT_STOP"
         const val EXTRA_SCRIPT_URL = "script_url"
         const val EXTRA_SERVER_URL = "server_url"
@@ -97,12 +94,15 @@ class ScriptRunnerService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_RESUME -> { paused = false; log("▶ Водитель нажал «Далее»") }
+        if (intent == null) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        when (intent.action) {
             ACTION_STOP -> { log("⏹ Стоп"); disconnect(); return START_NOT_STICKY }
             ACTION_RUN -> startRun(intent)
         }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private fun startRun(intent: Intent) {
@@ -226,8 +226,11 @@ class ScriptRunnerService : Service() {
 
             val progress = UploadProgress(this, packageName, count, dataSizeKB)
             progress.start()
-            val resp = client.uploadSession(sessionId, responses, clientInfo)
-            progress.stop()
+            val resp = try {
+                client.uploadSession(sessionId, responses, clientInfo)
+            } finally {
+                progress.stop()
+            }
             if (resp != null) {
                 val llmOk = resp.optBoolean("llm_success", false)
                 val llmAvail = resp.optBoolean("llm_available", false)

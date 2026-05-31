@@ -41,12 +41,14 @@ class SessionDb(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_
                 timestamp   INTEGER NOT NULL DEFAULT (strftime('%s','now'))
             )
         """)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_resp_session ON responses(session_id)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        db.execSQL("DROP TABLE IF EXISTS responses")
-        db.execSQL("DROP TABLE IF EXISTS sessions")
-        onCreate(db)
+        if (oldVersion < 2) {
+            db.execSQL("ALTER TABLE sessions ADD COLUMN server_url TEXT")
+        }
+        // Будущие версии — ALTER, не DROP
     }
 
     // ── Sessions ────────────────────────────────────────

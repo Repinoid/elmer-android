@@ -18,6 +18,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import kotlin.concurrent.thread
+import ru.elmer.client.BuildConfig
 import ru.elmer.client.R
 import ru.elmer.client.db.SessionDb
 import ru.elmer.client.script.ScriptRunnerService
@@ -46,18 +47,32 @@ class MainActivity : AppCompatActivity() {
     companion object {
         const val REQUEST_BT_PERMISSIONS = 1
         const val REQUEST_ENABLE_BT = 2
+        private const val PING_LLM_THROTTLE_MS = 60_000L
     }
 
-    private val statusReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            val msg = intent?.getStringExtra("message") ?: return
-            runOnUiThread { appendStatus("\n$msg") }
-        }
+    private var lastPingLlmTime = 0L
+
+    private fun addApiKey(conn: java.net.HttpURLConnection) {
+        val key = BuildConfig.API_KEY
+        if (key.isNotEmpty()) conn.setRequestProperty("X-Api-Key", key)
     }
+
+    // ⚠️ statusReceiver удалён — scriptStatusReceiver уже слушает BROADCAST_STATUS (дубликат)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        // Восстановление chatHistory после поворота
+        savedInstanceState?.getString("chat_json")?.let { json ->
+            try {
+                val arr = org.json.JSONArray(json)
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    chatHistory.add(obj.getString("role") to obj.getString("content"))
+                }
+            } catch (_: Exception) {}
+        }
 
         btnScript = findViewById(R.id.btn_script)
         cbFullMode = findViewById(R.id.cb_full_mode)
@@ -81,10 +96,6 @@ class MainActivity : AppCompatActivity() {
         val version = packageManager.getPackageInfo(packageName, 0).versionName
         val tvVersion = findViewById<TextView>(R.id.tv_version)
         tvVersion.text = "v$version"
-
-        registerReceiver(statusReceiver, IntentFilter(ScriptRunnerService.BROADCAST_STATUS),
-            ContextCompat.RECEIVER_NOT_EXPORTED)
-
 
         // ТЕСТОВАЯ КНОПКА
         val btnTest = findViewById<Button>(R.id.btn_test)
@@ -114,6 +125,7 @@ class MainActivity : AppCompatActivity() {
                 val t0 = System.currentTimeMillis()
                 val req = java.net.URL("https://obdai.ru/api/v1/ping").openConnection() as java.net.HttpURLConnection
                 req.connectTimeout = 5000; req.readTimeout = 5000
+                addApiKey(req)
                 ok = req.responseCode == 200
                 req.disconnect()
                 val ms = System.currentTimeMillis() - t0
@@ -123,12 +135,19 @@ class MainActivity : AppCompatActivity() {
             }
             if (!ok) return@thread
 
-            // Этап 2: LLM (GET /ping-llm)
+            // Этап 2: LLM (GET /ping-llm) — throttle 60с
+            val now = System.currentTimeMillis()
+            if (now - lastPingLlmTime < PING_LLM_THROTTLE_MS) {
+                ui { appendStatus("⏱ LLM: throttled (тест не чаще 60с)") }
+                return@thread
+            }
+            lastPingLlmTime = now
             ui { appendStatus("🧠 LLM...") }
             try {
                 val t0 = System.currentTimeMillis()
                 val req = java.net.URL("https://obdai.ru/api/v1/ping-llm").openConnection() as java.net.HttpURLConnection
                 req.connectTimeout = 5000; req.readTimeout = 15000
+                addApiKey(req)
                 val code = req.responseCode
                 val ms = System.currentTimeMillis() - t0
                 val body = if (code == 200) req.inputStream.bufferedReader().readText() else ""
@@ -206,34 +225,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private val scriptPromptReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            val prompt = intent?.getStringExtra("prompt") ?: return
-            runOnUiThread {
-                if (prompt.isEmpty()) {
-                    tvPrompt.visibility = android.view.View.GONE
-                    tvPrompt.text = ""
-                } else {
-                    tvPrompt.text = "👆 $prompt"
-                    tvPrompt.visibility = android.view.View.VISIBLE
-                    // Кнопка «Далее» — отправляем ACTION_RESUME
-                    tvPrompt.setOnClickListener {
-                        val resume = Intent(this@MainActivity, ScriptRunnerService::class.java).apply {
-                            action = ScriptRunnerService.ACTION_RESUME
-                        }
-                        startService(resume)
-                        tvPrompt.visibility = android.view.View.GONE
-                    }
-                    appendStatus("\n⏸ $prompt (нажми на жёлтую строку)")
-                }
-            }
-        }
-    }
-
     override fun onDestroy() {
-        try { unregisterReceiver(statusReceiver) } catch (_: Exception) {}
         try { unregisterReceiver(scriptStatusReceiver) } catch (_: Exception) {}
-        try { unregisterReceiver(scriptPromptReceiver) } catch (_: Exception) {}
         try { unregisterReceiver(scriptStageReceiver) } catch (_: Exception) {}
         super.onDestroy()
     }
@@ -268,6 +261,7 @@ class MainActivity : AppCompatActivity() {
                 val req = java.net.URL("https://obdai.ru/api/v1/chat").openConnection() as java.net.HttpURLConnection
                 req.connectTimeout = 10000; req.readTimeout = 60000
                 req.doOutput = true; req.setRequestProperty("Content-Type", "application/json")
+                addApiKey(req)
                 req.outputStream.write(json.toString().toByteArray())
                 val body = if (req.responseCode == 200)
                     req.inputStream.bufferedReader().readText() else ""

@@ -61,10 +61,10 @@ class ElmProtocol(
     // ── OBD-команда ───────────────────────────────────────
 
     fun sendCommand(cmd: String): String {
-        if (state == State.ERROR) recover()
+        if (state == State.ERROR || state == State.DISCONNECTED) recover()
         state = State.BUSY
         val result = exec(cmd, timeoutMs)
-        state = State.READY
+        if (state == State.BUSY) state = State.READY
         return result
     }
 
@@ -136,6 +136,7 @@ class ElmProtocol(
     // ── Побайтовое чтение ─────────────────────────────────
 
     private fun write(cmd: String) {
+        while (input.available() > 0) input.read()   // дренаж хвостов
         output.write((cmd + "\r").toByteArray())
         output.flush()
         Log.d(TAG, "→ $cmd")

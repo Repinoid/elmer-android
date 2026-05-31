@@ -19,6 +19,10 @@ android {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            buildConfigField("String", "API_KEY", "\"${project.findProperty("ELMER_API_KEY") ?: ""}\"")
+        }
+        debug {
+            buildConfigField("String", "API_KEY", "\"${project.findProperty("ELMER_API_KEY") ?: ""}\"")
         }
     }
 

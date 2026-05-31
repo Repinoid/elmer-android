@@ -6,7 +6,10 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import ru.elmer.client.BuildConfig
 import java.io.IOException
+import java.util.UUID
+import kotlin.random.Random
 
 /**
  * HTTP-клиент для сервера Elmer.
@@ -30,11 +33,18 @@ class ServerClient(
         .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
         .build()
 
+    private fun authHeaders(builder: Request.Builder) {
+        val key = BuildConfig.API_KEY
+        if (key.isNotEmpty()) {
+            builder.header("X-Api-Key", key)
+        }
+    }
+
     /** Скачивает скрипт с сервера. При ошибке — fallback. */
     fun downloadScript(): String {
         Log.i(TAG, "Downloading script from $scriptUrl")
         return try {
-            val req = Request.Builder().url(scriptUrl).build()
+            val req = Request.Builder().url(scriptUrl).also { authHeaders(it) }.build()
             val resp = http.newCall(req).execute()
             val body = resp.body?.string() ?: ""
             resp.close()
@@ -53,7 +63,11 @@ class ServerClient(
                       clientInfo: Map<String, String> = emptyMap()): JSONObject? {
         Log.i(TAG, "Uploading session $sessionId (${responses.size} responses)")
 
+        // UUID генерируется один раз до ретраев (идемпотентность)
+        val requestId = UUID.randomUUID().toString()
+
         val json = JSONObject().apply {
+            put("request_id", requestId)
             put("session_id", sessionId)
             put("responses", JSONArray().apply {
                 for (r in responses) {
@@ -73,6 +87,8 @@ class ServerClient(
 
         val req = Request.Builder()
             .url("$serverUrl/api/v1/session/upload")
+            .header("Idempotency-Key", requestId)
+            .also { authHeaders(it) }
             .post(json.toString().toRequestBody("application/json".toMediaType()))
             .build()
 
@@ -88,7 +104,10 @@ class ServerClient(
             } catch (e: IOException) {
                 lastEx = e
                 Log.w(TAG, "Upload attempt $attempt: ${e.message}")
-                if (attempt < 3) Thread.sleep(2000)
+                if (attempt < 3) {
+                    val delay = 1000L * (1 shl (attempt - 1)) + Random.nextLong(0, 500)
+                    Thread.sleep(delay)
+                }
             }
         }
         Log.w(TAG, "Server unavailable after 3 attempts: ${lastEx?.message}")
