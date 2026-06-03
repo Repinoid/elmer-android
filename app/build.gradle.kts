@@ -7,6 +7,10 @@ android {
     namespace = "ru.elmer.client"
     compileSdk = 34
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId = "ru.elmer.client"
         minSdk = 24
