@@ -24,7 +24,7 @@ android {
         applicationId = "ru.elmer.client"
         minSdk = 24
         targetSdk = 34
-        versionCode = 37
+        versionCode = 38
         versionName = "0.37.0-dev"
     }
 
@@ -35,6 +35,7 @@ android {
             buildConfigField("String", "API_KEY", "\"${project.findProperty("ELMER_API_KEY") ?: ""}\"")
         }
         debug {
+            signingConfig = signingConfigs.getByName("fixed")
             buildConfigField("String", "API_KEY", "\"${project.findProperty("ELMER_API_KEY") ?: ""}\"")
         }
     }
