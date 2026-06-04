@@ -11,6 +11,15 @@ android {
         buildConfig = true
     }
 
+    signingConfigs {
+        create("fixed") {
+            storeFile = rootProject.file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     defaultConfig {
         applicationId = "ru.elmer.client"
         minSdk = 24
@@ -26,6 +35,7 @@ android {
             buildConfigField("String", "API_KEY", "\"${project.findProperty("ELMER_API_KEY") ?: ""}\"")
         }
         debug {
+            signingConfig = signingConfigs.getByName("fixed")
             buildConfigField("String", "API_KEY", "\"${project.findProperty("ELMER_API_KEY") ?: ""}\"")
         }
     }

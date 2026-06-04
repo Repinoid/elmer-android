@@ -1,8 +1,8 @@
-name: Build APK
+name: Build & Deploy APK
 
 on:
   push:
-    branches: [master, relay-only, fat-client]
+    branches: [master]
   workflow_dispatch:
 
 jobs:
@@ -20,11 +20,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Android SDK
-        run: |
-          yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" 2>/dev/null || true
-          echo "ANDROID_HOME=${ANDROID_HOME}" >> $GITHUB_ENV
-
       - name: Cache Gradle
         uses: actions/cache@v4
         with:
@@ -36,13 +31,23 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: 8.7
+          gradle-version: 8.5
 
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: elmer-debug
-          path: app/build/outputs/apk/debug/*.apk
+          name: elmer-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Deploy to obdai.ru
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: 5.172.178.213
+          username: naeel
+          key: ${{ secrets.SSH_KEY }}
+          source: "app/build/outputs/apk/debug/app-debug.apk"
+          target: "/opt/elmer/web/static/"
+          strip_components: 4
