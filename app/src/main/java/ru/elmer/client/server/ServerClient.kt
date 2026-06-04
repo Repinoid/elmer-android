@@ -58,9 +58,48 @@ class ServerClient(
         }
     }
 
+    /** Проверка доступности сервера. */
+    fun ping(): PingResult {
+        Log.i(TAG, "Ping server...")
+        val t0 = System.currentTimeMillis()
+        return try {
+            val req = Request.Builder().url("$serverUrl/api/v1/ping").also { authHeaders(it) }.build()
+            val resp = http.newCall(req).execute()
+            val ms = System.currentTimeMillis() - t0
+            resp.close()
+            if (resp.isSuccessful) PingResult(true, ms.toInt(), "")
+            else PingResult(false, ms.toInt(), "HTTP ${resp.code}")
+        } catch (e: IOException) {
+            PingResult(false, (System.currentTimeMillis() - t0).toInt(), e.message ?: "?")
+        }
+    }
+
+    /** Проверка доступности LLM. */
+    fun pingLlm(): PingResult {
+        Log.i(TAG, "Ping LLM...")
+        val t0 = System.currentTimeMillis()
+        return try {
+            val req = Request.Builder().url("$serverUrl/api/v1/ping-llm").also { authHeaders(it) }.build()
+            val resp = http.newCall(req).execute()
+            val ms = System.currentTimeMillis() - t0
+            val body = resp.body?.string() ?: ""
+            resp.close()
+            if (resp.isSuccessful) {
+                val j = try { JSONObject(body) } catch (_: Exception) { null }
+                if (j != null && j.optBoolean("ok")) PingResult(true, j.optInt("ms", ms.toInt()), "")
+                else PingResult(false, ms.toInt(), j?.optString("error", "?") ?: "?")
+            } else PingResult(false, ms.toInt(), "HTTP ${resp.code}")
+        } catch (e: IOException) {
+            PingResult(false, (System.currentTimeMillis() - t0).toInt(), e.message ?: "?")
+        }
+    }
+
+    data class PingResult(val ok: Boolean, val ms: Int, val error: String)
+
     /** Загружает батч ответов на сервер. Возвращает JSON-ответ или null. */
     fun uploadSession(sessionId: Long, responses: List<Map<String, String?>>,
-                      clientInfo: Map<String, String> = emptyMap()): JSONObject? {
+                      clientInfo: Map<String, String> = emptyMap(),
+                      carInfo: String = ""): JSONObject? {
         Log.i(TAG, "Uploading session $sessionId (${responses.size} responses)")
 
         // UUID генерируется один раз до ретраев (идемпотентность)
@@ -69,6 +108,7 @@ class ServerClient(
         val json = JSONObject().apply {
             put("request_id", requestId)
             put("session_id", sessionId)
+            if (carInfo.isNotEmpty()) put("car_info", carInfo)
             put("responses", JSONArray().apply {
                 for (r in responses) {
                     put(JSONObject().apply {

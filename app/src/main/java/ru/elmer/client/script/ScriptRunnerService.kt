@@ -46,6 +46,7 @@ class ScriptRunnerService : Service() {
     private var retryCount: Int = 0
     private var timeoutCount: Int = 0
     private var scriptMode: String = ""
+    private var carInfo: String = ""
 
     companion object {
         const val TAG = "ElmerScript"
@@ -56,6 +57,7 @@ class ScriptRunnerService : Service() {
         const val EXTRA_SCRIPT_URL = "script_url"
         const val EXTRA_SERVER_URL = "server_url"
         const val EXTRA_DEBUG_HOST = "debug_host"
+        const val EXTRA_CAR_INFO = "car_info"
         const val BROADCAST_STATUS = "ru.elmer.client.SCRIPT_STATUS"
         const val BROADCAST_PROMPT = "ru.elmer.client.SCRIPT_PROMPT"
         const val BROADCAST_STAGE  = "ru.elmer.client.SCRIPT_STAGE"
@@ -110,6 +112,7 @@ class ScriptRunnerService : Service() {
             ?: intent.getStringExtra(EXTRA_SERVER_URL)?.let { "$it/api/v1/script" }
             ?: "https://obdai.ru/api/v1/script"
         serverUrl = intent.getStringExtra(EXTRA_SERVER_URL) ?: "https://obdai.ru"
+        carInfo = intent.getStringExtra(EXTRA_CAR_INFO) ?: ""
 
         scriptMode = if (scriptUrl.contains("full")) "full" else "test"
         startTime = System.currentTimeMillis()
@@ -227,7 +230,7 @@ class ScriptRunnerService : Service() {
             val progress = UploadProgress(this, packageName, count, dataSizeKB)
             progress.start()
             val resp = try {
-                client.uploadSession(sessionId, responses, clientInfo)
+                client.uploadSession(sessionId, responses, clientInfo, carInfo)
             } finally {
                 progress.stop()
             }

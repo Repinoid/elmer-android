@@ -31,10 +31,12 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var btnScript: Button
     private lateinit var btnHistory: Button
+    private lateinit var btnCheckElm: Button
     private lateinit var cbFullMode: CheckBox
     private lateinit var tvStatus: TextView
     private lateinit var tvPrompt: TextView
     private lateinit var etInput: EditText
+    private lateinit var etCarInfo: EditText
     private lateinit var btnSend: Button
     private lateinit var btnClose: Button
     private lateinit var scrollOutput: ScrollView
@@ -47,10 +49,13 @@ class MainActivity : AppCompatActivity() {
     companion object {
         const val REQUEST_BT_PERMISSIONS = 1
         const val REQUEST_ENABLE_BT = 2
-        private const val PING_LLM_THROTTLE_MS = 60_000L
+        private const val PING_THROTTLE_MS = 7_000L       // 7с при ошибках
+        private const val PING_OK_THROTTLE_MS = 60_000L   // 60с при успехе
     }
 
+    private var lastPingTime = 0L
     private var lastPingLlmTime = 0L
+    private var lastPingOk = false
 
     private fun addApiKey(conn: java.net.HttpURLConnection) {
         val key = BuildConfig.API_KEY
@@ -77,11 +82,14 @@ class MainActivity : AppCompatActivity() {
         btnScript = findViewById(R.id.btn_script)
         cbFullMode = findViewById(R.id.cb_full_mode)
         btnHistory = findViewById(R.id.btn_history)
+        btnCheckElm = findViewById(R.id.btn_check_elm)
 
         btnHistory.setOnClickListener { showHistory() }
+        btnCheckElm.setOnClickListener { checkElm() }
         tvStatus = findViewById(R.id.tv_status)
         tvPrompt = findViewById(R.id.tv_prompt)
         etInput = findViewById(R.id.et_input)
+        etCarInfo = findViewById(R.id.et_car_info)
         btnSend = findViewById(R.id.btn_send)
         btnClose = findViewById(R.id.btn_close)
         scrollOutput = findViewById(R.id.scroll_output)
@@ -108,7 +116,11 @@ class MainActivity : AppCompatActivity() {
         registerScriptReceiver()
 
         // Восстановление вывода после поворота экрана
-        savedInstanceState?.getString("status_text")?.let { tvStatus.text = it }
+        savedInstanceState?.getString("status_text")?.let {
+            tvStatus.text = it
+        } ?: run {
+            tvStatus.text = "⏳ Загрузка...\n\nНажмите 📡 Сервер для проверки связи.\nНажмите 🔍 ДИАГНОСТИКА для запуска."
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -118,52 +130,38 @@ class MainActivity : AppCompatActivity() {
 
     private fun startTest() {
         thread(name = "ServerTest", isDaemon = true) {
-            // Этап 1: связь с сервером (GET /ping)
-            ui { appendStatus("📡 Сервер...") }
-            var ok = false
-            try {
-                val t0 = System.currentTimeMillis()
-                val req = java.net.URL("https://obdai.ru/api/v1/ping").openConnection() as java.net.HttpURLConnection
-                req.connectTimeout = 5000; req.readTimeout = 5000
-                addApiKey(req)
-                ok = req.responseCode == 200
-                req.disconnect()
-                val ms = System.currentTimeMillis() - t0
-                ui { appendStatus(if (ok) "✅ Сервер: ${ms}мс" else "❌ Сервер: HTTP ${req.responseCode}") }
-            } catch (e: Exception) {
-                ui { appendStatus("❌ Сервер: ${e.message}") }
-            }
-            if (!ok) return@thread
+            val client = ru.elmer.client.server.ServerClient(
+                "https://obdai.ru",
+                "https://obdai.ru/api/v1/script",
+                ""
+            )
 
-            // Этап 2: LLM (GET /ping-llm) — throttle 60с
+            // Этап 1: сервер (с троттлингом)
             val now = System.currentTimeMillis()
-            if (now - lastPingLlmTime < PING_LLM_THROTTLE_MS) {
-                ui { appendStatus("⏱ LLM: throttled (тест не чаще 60с)") }
+            val throttle = if (lastPingOk) PING_OK_THROTTLE_MS else PING_THROTTLE_MS
+            if (now - lastPingTime < throttle) {
+                ui { appendStatus("⏱ Сервер: проверка не чаще ${throttle/1000}с") }
                 return@thread
             }
-            lastPingLlmTime = now
-            ui { appendStatus("🧠 LLM...") }
-            try {
-                val t0 = System.currentTimeMillis()
-                val req = java.net.URL("https://obdai.ru/api/v1/ping-llm").openConnection() as java.net.HttpURLConnection
-                req.connectTimeout = 5000; req.readTimeout = 15000
-                addApiKey(req)
-                val code = req.responseCode
-                val ms = System.currentTimeMillis() - t0
-                val body = if (code == 200) req.inputStream.bufferedReader().readText() else ""
-                req.disconnect()
+            lastPingTime = now
+            ui { appendStatus("📡 Сервер...") }
+            val ping = client.ping()
+            if (ping.ok) {
+                lastPingOk = true
+                ui { appendStatus("✅ Сервер: ${ping.ms}мс") }
+            } else {
+                lastPingOk = false
+                ui { appendStatus("❌ Сервер: ${ping.error}") }
+                return@thread
+            }
 
-                if (code == 200) {
-                    val r = org.json.JSONObject(body)
-                    if (r.optBoolean("ok"))
-                        ui { appendStatus("✅ LLM: ${r.optInt("ms", ms.toInt())}мс") }
-                    else
-                        ui { appendStatus("⚠️ LLM: ${r.optString("error", "?")}") }
-                } else {
-                    ui { appendStatus("⚠️ LLM: HTTP $code") }
-                }
-            } catch (e: Exception) {
-                ui { appendStatus("⚠️ LLM: ${e.message}") }
+            // Этап 2: LLM
+            ui { appendStatus("🧠 LLM...") }
+            val llm = client.pingLlm()
+            if (llm.ok) {
+                ui { appendStatus("✅ LLM: ${llm.ms}мс") }
+            } else {
+                ui { appendStatus("⚠️ LLM: ${llm.error}") }
             }
         }
     }
@@ -172,9 +170,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun startScript() {
         val mode = if (cbFullMode.isChecked) "full" else "test"
+        val carInfo = etCarInfo.text.toString().trim()
         val intent = Intent(this, ScriptRunnerService::class.java).apply {
             action = ScriptRunnerService.ACTION_RUN
             putExtra(ScriptRunnerService.EXTRA_SCRIPT_URL, "https://obdai.ru/api/v1/script?mode=$mode")
+            if (carInfo.isNotEmpty()) putExtra(ScriptRunnerService.EXTRA_CAR_INFO, carInfo)
         }
         ContextCompat.startForegroundService(this, intent)
 
@@ -183,6 +183,50 @@ class MainActivity : AppCompatActivity() {
         tvStatus.text = "⏳ Инициализация ELM327..."
         scriptStartTime = System.currentTimeMillis()
         registerScriptReceiver()
+    }
+
+    // ── Проверка ELM327 ─────────────────────────────────
+
+    private fun checkElm() {
+        if (btAdapter == null) {
+            tvStatus.text = "❌ Bluetooth не поддерживается"
+            return
+        }
+        if (!btAdapter!!.isEnabled) {
+            tvStatus.text = "❌ Включите Bluetooth"
+            return
+        }
+        val paired = btAdapter!!.bondedDevices
+        val dev = paired.find { d ->
+            d.name.uppercase().let { it.contains("OBD") || it.contains("ELM") || it.contains("CBT") || it.contains("V-LINK") }
+        }
+        if (dev == null) {
+            tvStatus.text = "❌ ELM327 не найден среди спаренных устройств (${paired.size} шт.)\nСопрягите в Настройки → Bluetooth"
+            return
+        }
+
+        tvStatus.text = "⏳ Проверка ELM327..."
+        thread(name = "ElmCheck", isDaemon = true) {
+            val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
+            val r = checker.run()
+            runOnUiThread {
+                tvStatus.text = if (r.good) {
+                    "✅ Чёткое устройство!\n\n" +
+                    "🔹 Версия: ${r.version}\n" +
+                    "🔹 Протокол: ${r.protocol}\n" +
+                    "🔹 Напряжение: ${r.voltage}\n" +
+                    "🔹 Адаптивный тайминг: ${if (r.hasAdaptive) "✅" else "❌"}\n" +
+                    "🔹 PID'ы ЭБУ: ${r.pidMask}\n" +
+                    if (r.vin != null) "🔹 VIN: ${r.vin}\n" else "🔹 VIN: не определился\n"
+                } else {
+                    "⚠️ Клон или слабый ELM327 (v1.5)\nДанные могут быть неполными — постараемся.\n\n" +
+                    "🔹 Версия: ${r.version}\n" +
+                    "🔹 Протокол: ${r.protocol}\n" +
+                    "🔹 Адаптивный тайминг: ❌\n" +
+                    if (r.vin != null) "🔹 VIN: ${r.vin}" else "🔹 VIN: не определился"
+                }
+            }
+        }
     }
 
     private fun registerScriptReceiver() {

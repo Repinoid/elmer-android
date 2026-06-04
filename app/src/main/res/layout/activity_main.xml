@@ -81,6 +81,55 @@
 
     </LinearLayout>
 
+    <!-- ELM327 проверка -->
+    <Button
+        android:id="@+id/btn_check_elm"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="🔌 Проверить ELM327"
+        android:textSize="11sp"
+        android:textColor="#aaaaaa"
+        android:backgroundTint="#334455"
+        android:padding="8dp"
+        android:layout_marginBottom="6dp" />
+
+    <!-- Описание авто -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginBottom="4dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🚗 Что за машина? (можно пропустить)"
+            android:textSize="11sp"
+            android:textColor="#888888" />
+
+        <EditText
+            android:id="@+id/et_car_info"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Марка, модель, год, двигатель — что знаете"
+            android:textColor="#e0e0e0"
+            android:textColorHint="#444444"
+            android:textSize="12sp"
+            android:padding="8dp"
+            android:background="@drawable/edit_bg"
+            android:inputType="text"
+            android:maxLines="1" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Чем полнее информация — тем точнее диагноз."
+            android:textSize="9sp"
+            android:textColor="#555555"
+            android:gravity="end" />
+
+    </LinearLayout>
+
     <!-- Оверлей для промптов водителю -->
     <TextView
         android:id="@+id/tv_prompt"
