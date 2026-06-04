@@ -43,11 +43,9 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
 
       - name: Deploy to obdai.ru
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: 5.172.178.213
-          username: naeel
-          key: ${{ secrets.SSH_KEY }}
-          source: "app/build/outputs/apk/debug/app-debug.apk"
-          target: "/opt/elmer/web/static/"
-          strip_components: 4
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H 5.172.178.213 >> ~/.ssh/known_hosts
+          scp -i ~/.ssh/id_ed25519 app/build/outputs/apk/debug/app-debug.apk naeel@5.172.178.213:/opt/elmer/web/static/app-debug.apk
