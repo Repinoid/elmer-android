@@ -65,7 +65,6 @@ class ElmChecker(
 
     /** Этап 1: только AT-команды, зажигание НЕ нужно */
     fun checkDevice(): DeviceInfo? {
-        if (!connectAndInit()) return null
         val ati = send("ATI")
         val version = parseVersion(ati)
         val at1 = send("AT@1")
@@ -110,7 +109,6 @@ class ElmChecker(
             ecu = ecuData,
             log = logLines.joinToString("\n")
         )
-    }
     }
 
     private fun connectAndInit(): Boolean {
