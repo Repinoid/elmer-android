@@ -71,7 +71,8 @@ class ElmChecker(
 
         // 2a. AT@2 — идентификатор (клон = каша/пусто)
         val at2 = send("AT@2")
-        val deviceId = if (at2.length > 3 && !at2.matches(Regex("[? \t\r\n]+")) && at2 != "OK") at2.trim().take(60) else "—"
+        val at2clean = at2.trim().filter { it.isLetterOrDigit() || it == ' ' || it == '-' || it == '_' }
+        val deviceId = if (at2clean.length > 3 && at2 != "OK") at2clean.take(60) else "—"
 
         // 3. Протокол
         val dp = send("ATDP")
