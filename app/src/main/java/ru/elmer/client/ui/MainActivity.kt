@@ -32,6 +32,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnScript: Button
     private lateinit var btnHistory: Button
     private lateinit var btnCheckElm: Button
+    private lateinit var btnCheckEcu: Button
+    private var elmChecker: ru.elmer.client.elm.ElmChecker? = null
     private lateinit var cbFullMode: CheckBox
     private lateinit var tvStatus: TextView
     private lateinit var tvPrompt: TextView
@@ -83,9 +85,11 @@ class MainActivity : AppCompatActivity() {
         cbFullMode = findViewById(R.id.cb_full_mode)
         btnHistory = findViewById(R.id.btn_history)
         btnCheckElm = findViewById(R.id.btn_check_elm)
+        btnCheckEcu = findViewById(R.id.btn_check_ecu)
 
         btnHistory.setOnClickListener { showHistory() }
         btnCheckElm.setOnClickListener { checkElm() }
+        btnCheckEcu.setOnClickListener { checkEcu() }
         tvStatus = findViewById(R.id.tv_status)
         tvPrompt = findViewById(R.id.tv_prompt)
         etInput = findViewById(R.id.et_input)
@@ -185,61 +189,71 @@ class MainActivity : AppCompatActivity() {
         registerScriptReceiver()
     }
 
-    // ── Проверка ELM327 ─────────────────────────────────
+    // ── Проверка ELM327 (прибор) ───────────────────────────
 
     private fun checkElm() {
-        if (btAdapter == null) {
-            tvStatus.text = "❌ Bluetooth не поддерживается"
-            return
-        }
-        if (!btAdapter!!.isEnabled) {
-            tvStatus.text = "❌ Включите Bluetooth"
-            return
-        }
-        val paired = btAdapter!!.bondedDevices
-        val dev = paired.find { d ->
-            d.name.uppercase().let { it.contains("OBD") || it.contains("ELM") || it.contains("CBT") || it.contains("V-LINK") }
-        }
-        if (dev == null) {
-            tvStatus.text = "❌ ELM327 не найден среди спаренных устройств (${paired.size} шт.)\nСопрягите в Настройки → Bluetooth"
-            return
-        }
-
-        tvStatus.text = "⏳ Проверка ELM327..."
-        val checkStart = System.currentTimeMillis()
+        val dev = findElmDevice() ?: return
+        tvStatus.text = "⏳ Опрос ELM..."
+        startTimer("ElmTimer", "⏳ Опрос ELM")
         thread(name = "ElmCheck", isDaemon = true) {
-            // таймер для показа что не зависло
-            thread(name = "ElmCheckTimer", isDaemon = true) {
-                var sec = 0
-                while (true) {
-                    Thread.sleep(1000)
-                    sec++
-                    runOnUiThread {
-                        if (tvStatus.text?.startsWith("⏳") == true)
-                            tvStatus.text = "⏳ Проверка ELM327... [${sec}с]"
+            val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
+            val r = checker.checkDevice()
+            runOnUiThread {
+                if (r == null) {
+                    tvStatus.text = "❌ ELM не отвечает"
+                } else {
+                    elmChecker = checker  // сохраняем для ЭБУ
+                    val deviceLine = if (r.deviceId != "—") "🔹 Устройство: ${r.deviceId}\n" else ""
+                    val good = r.hasAdaptive && r.version.contains("v2")
+                    tvStatus.text = if (good) {
+                        "✅ Чёткое устройство!\n\n${deviceLine}" +
+                        "🔹 Версия: ${r.version}\n🔹 Протокол: ${r.protocol}\n" +
+                        "🔹 Напряжение: ${r.voltage}\n🔹 Адаптивный тайминг: ✅\n"
+                    } else {
+                        "⚠️ Клон или слабый ELM327\n\n${deviceLine}" +
+                        "🔹 Версия: ${r.version}\n🔹 Протокол: ${r.protocol}\n🔹 Адаптивный тайминг: ❌\n"
                     }
                 }
             }
-            val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
-            val r = checker.run()
+        }
+    }
+
+    private fun checkEcu() {
+        val checker = elmChecker
+        if (checker == null) {
+            tvStatus.text = "⚠️ Сначала нажми \"🔌 ELM\""
+            return
+        }
+        tvStatus.text = "⏳ Опрос ЭБУ..."
+        startTimer("EcuTimer", "⏳ Опрос ЭБУ")
+        thread(name = "EcuCheck", isDaemon = true) {
+            val r = checker.checkEcu()
             runOnUiThread {
-                val deviceLine = if (r.device.deviceId != "—") "🔹 Устройство: ${r.device.deviceId}\n" else ""
-                tvStatus.text = if (r.good) {
-                    "✅ Чёткое устройство!\n\n" +
-                    deviceLine +
-                    "🔹 Версия: ${r.device.version}\n" +
-                    "🔹 Протокол: ${r.device.protocol}\n" +
-                    "🔹 Напряжение: ${r.device.voltage}\n" +
-                    "🔹 Адаптивный тайминг: ${if (r.device.hasAdaptive) "✅" else "❌"}\n" +
-                    "🔹 PID'ы ЭБУ: ${r.ecu.pidMask}\n" +
-                    if (r.ecu.vin != null) "🔹 VIN: ${r.ecu.vin}\n" else "🔹 VIN: не определился\n"
-                } else {
-                    "⚠️ Клон или слабый ELM327 (v1.5)\nДанные могут быть неполными — постараемся.\n\n" +
-                    deviceLine +
-                    "🔹 Версия: ${r.device.version}\n" +
-                    "🔹 Протокол: ${r.device.protocol}\n" +
-                    "🔹 Адаптивный тайминг: ❌\n" +
-                    if (r.ecu.vin != null) "🔹 VIN: ${r.ecu.vin}\n" else "🔹 VIN: не определился\n"
+                val obd = if (r.supportsObd) "✅" else "❌"
+                tvStatus.text = "🚗 ЭБУ: OBD $obd, PID: ${r.pidMask}" +
+                    if (r.vin != null) "\n🔹 VIN: ${r.vin}" else "\n🔹 VIN: не определился"
+            }
+        }
+    }
+
+    private fun findElmDevice(): BluetoothDevice? {
+        if (btAdapter == null) { tvStatus.text = "❌ BT не поддерживается"; return null }
+        if (!btAdapter!!.isEnabled) { tvStatus.text = "❌ Включите Bluetooth"; return null }
+        val paired = btAdapter!!.bondedDevices
+        val dev = paired.find { it.name.uppercase().let { n -> n.contains("OBD") || n.contains("ELM") || n.contains("CBT") || n.contains("V-LINK") } }
+        if (dev == null) tvStatus.text = "❌ ELM327 не найден среди спаренных устройств (${paired.size} шт.)"
+        return dev
+    }
+
+    private fun startTimer(name: String, label: String) {
+        thread(name = name, isDaemon = true) {
+            var sec = 0
+            while (true) {
+                Thread.sleep(1000)
+                sec++
+                runOnUiThread {
+                    if (tvStatus.text?.startsWith("⏳") == true)
+                        tvStatus.text = "$label... [${sec}с]"
                 }
             }
         }
