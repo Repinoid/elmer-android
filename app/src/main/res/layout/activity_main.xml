@@ -49,61 +49,78 @@
         android:checked="false"
         android:layout_marginBottom="6dp" />
 
-    <!-- Второстепенные кнопки в ряд -->
+    <!-- Проверки -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
+        android:orientation="vertical"
+        android:background="#151525"
+        android:padding="6dp"
         android:layout_marginBottom="4dp">
 
-        <Button
-            android:id="@+id/btn_test"
-            android:layout_width="0dp"
+        <TextView
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="📡 Сервер"
+            android:text="🔍 Проверка"
             android:textSize="10sp"
-            android:textColor="#aaaaaa"
-            android:backgroundTint="#444444"
-            android:padding="8dp"
-            android:layout_marginEnd="3dp" />
+            android:textColor="#666666"
+            android:layout_marginBottom="4dp"
+            android:layout_marginStart="4dp" />
 
-        <Button
-            android:id="@+id/btn_check_elm"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="🔌 ELM"
-            android:textSize="10sp"
-            android:textColor="#aaaaaa"
-            android:backgroundTint="#334455"
-            android:padding="8dp"
-            android:layout_marginEnd="3dp" />
+            android:orientation="horizontal">
 
-        <Button
-            android:id="@+id/btn_check_ecu"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="🚗 ЭБУ"
-            android:textSize="10sp"
-            android:textColor="#aaaaaa"
-            android:backgroundTint="#334455"
-            android:padding="8dp"
-            android:layout_marginEnd="3dp" />
+            <Button
+                android:id="@+id/btn_test"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="📡 Сервер"
+                android:textSize="10sp"
+                android:textColor="#aaaaaa"
+                android:backgroundTint="#2a2a3e"
+                android:padding="6dp"
+                android:layout_marginEnd="3dp" />
 
-        <Button
-            android:id="@+id/btn_history"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="📋 История"
-            android:textSize="10sp"
-            android:textColor="#ffffff"
-            android:backgroundTint="#9C27B0"
-            android:padding="8dp" />
+            <Button
+                android:id="@+id/btn_check_elm"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="🔌 ELM"
+                android:textSize="10sp"
+                android:textColor="#aaaaaa"
+                android:backgroundTint="#2a2a3e"
+                android:padding="6dp"
+                android:layout_marginEnd="3dp" />
 
+            <Button
+                android:id="@+id/btn_check_ecu"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="🚗 ЭБУ"
+                android:textSize="10sp"
+                android:textColor="#aaaaaa"
+                android:backgroundTint="#2a2a3e"
+                android:padding="6dp" />
+
+        </LinearLayout>
     </LinearLayout>
+
+    <!-- История -->
+    <Button
+        android:id="@+id/btn_history"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="📋 История"
+        android:textSize="11sp"
+        android:textColor="#ffffff"
+        android:backgroundTint="#9C27B0"
+        android:padding="8dp"
+        android:layout_marginBottom="4dp" />
 
     <!-- Описание авто -->
     <LinearLayout
