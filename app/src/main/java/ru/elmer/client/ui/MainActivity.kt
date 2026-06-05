@@ -223,23 +223,23 @@ class MainActivity : AppCompatActivity() {
             val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
             val r = checker.run()
             runOnUiThread {
-                val deviceLine = if (r.deviceId != "—") "🔹 Устройство: ${r.deviceId}\n" else ""
+                val deviceLine = if (r.device.deviceId != "—") "🔹 Устройство: ${r.device.deviceId}\n" else ""
                 tvStatus.text = if (r.good) {
                     "✅ Чёткое устройство!\n\n" +
                     deviceLine +
-                    "🔹 Версия: ${r.version}\n" +
-                    "🔹 Протокол: ${r.protocol}\n" +
-                    "🔹 Напряжение: ${r.voltage}\n" +
-                    "🔹 Адаптивный тайминг: ${if (r.hasAdaptive) "✅" else "❌"}\n" +
-                    "🔹 PID'ы ЭБУ: ${r.pidMask}\n" +
-                    if (r.vin != null) "🔹 VIN: ${r.vin}\n" else "🔹 VIN: не определился\n"
+                    "🔹 Версия: ${r.device.version}\n" +
+                    "🔹 Протокол: ${r.device.protocol}\n" +
+                    "🔹 Напряжение: ${r.device.voltage}\n" +
+                    "🔹 Адаптивный тайминг: ${if (r.device.hasAdaptive) "✅" else "❌"}\n" +
+                    "🔹 PID'ы ЭБУ: ${r.ecu.pidMask}\n" +
+                    if (r.ecu.vin != null) "🔹 VIN: ${r.ecu.vin}\n" else "🔹 VIN: не определился\n"
                 } else {
                     "⚠️ Клон или слабый ELM327 (v1.5)\nДанные могут быть неполными — постараемся.\n\n" +
                     deviceLine +
-                    "🔹 Версия: ${r.version}\n" +
-                    "🔹 Протокол: ${r.protocol}\n" +
+                    "🔹 Версия: ${r.device.version}\n" +
+                    "🔹 Протокол: ${r.device.protocol}\n" +
                     "🔹 Адаптивный тайминг: ❌\n" +
-                    if (r.vin != null) "🔹 VIN: ${r.vin}\n" else "🔹 VIN: не определился\n"
+                    if (r.ecu.vin != null) "🔹 VIN: ${r.ecu.vin}\n" else "🔹 VIN: не определился\n"
                 }
             }
         }
