@@ -206,12 +206,27 @@ class MainActivity : AppCompatActivity() {
         }
 
         tvStatus.text = "⏳ Проверка ELM327..."
+        val checkStart = System.currentTimeMillis()
         thread(name = "ElmCheck", isDaemon = true) {
+            // таймер для показа что не зависло
+            thread(name = "ElmCheckTimer", isDaemon = true) {
+                var sec = 0
+                while (true) {
+                    Thread.sleep(1000)
+                    sec++
+                    runOnUiThread {
+                        if (tvStatus.text?.startsWith("⏳") == true)
+                            tvStatus.text = "⏳ Проверка ELM327... [${sec}с]"
+                    }
+                }
+            }
             val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
             val r = checker.run()
             runOnUiThread {
+                val deviceLine = if (r.deviceId != "—") "🔹 Устройство: ${r.deviceId}\n" else ""
                 tvStatus.text = if (r.good) {
                     "✅ Чёткое устройство!\n\n" +
+                    deviceLine +
                     "🔹 Версия: ${r.version}\n" +
                     "🔹 Протокол: ${r.protocol}\n" +
                     "🔹 Напряжение: ${r.voltage}\n" +
@@ -220,10 +235,11 @@ class MainActivity : AppCompatActivity() {
                     if (r.vin != null) "🔹 VIN: ${r.vin}\n" else "🔹 VIN: не определился\n"
                 } else {
                     "⚠️ Клон или слабый ELM327 (v1.5)\nДанные могут быть неполными — постараемся.\n\n" +
+                    deviceLine +
                     "🔹 Версия: ${r.version}\n" +
                     "🔹 Протокол: ${r.protocol}\n" +
                     "🔹 Адаптивный тайминг: ❌\n" +
-                    if (r.vin != null) "🔹 VIN: ${r.vin}" else "🔹 VIN: не определился"
+                    if (r.vin != null) "🔹 VIN: ${r.vin}\n" else "🔹 VIN: не определился\n"
                 }
             }
         }

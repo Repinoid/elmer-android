@@ -31,6 +31,7 @@ class ElmChecker(
     data class Result(
         val good: Boolean,          // устройство чёткое или клон
         val version: String,        // ELM327 v2.1 / v1.5 / "?"
+        val deviceId: String,       // AT@2 — идентификатор
         val protocol: String,       // OBD-протокол
         val voltage: String,        // напряжение бортсети (или "—")
         val hasAdaptive: Boolean,   // поддерживает ATAT1
@@ -68,6 +69,10 @@ class ElmChecker(
         val at1 = send("AT@1")
         val hasDeviceId = at1.length > 3 && at1 != "OK" && !at1.startsWith("?")
 
+        // 2a. AT@2 — идентификатор (клон = каша/пусто)
+        val at2 = send("AT@2")
+        val deviceId = if (at2.length > 3 && !at2.matches(Regex("[? \t\r\n]+")) && at2 != "OK") at2.trim().take(60) else "—"
+
         // 3. Протокол
         val dp = send("ATDP")
         val protocol = if (dp.length > 3 && dp != "OK") dp.take(60) else dp
@@ -96,6 +101,7 @@ class ElmChecker(
         return Result(
             good = good,
             version = version,
+            deviceId = deviceId,
             protocol = protocol,
             voltage = voltage,
             hasAdaptive = hasAdaptive,
@@ -166,7 +172,7 @@ class ElmChecker(
     }
 
     private fun failResult(version: String, protocol: String) = Result(
-        good = false, version = version, protocol = protocol,
+        good = false, version = version, deviceId = "—", protocol = protocol,
         voltage = "—", hasAdaptive = false, pidMask = "—",
         vin = null, log = logLines.joinToString("\n")
     )
