@@ -213,25 +213,26 @@ class MainActivity : AppCompatActivity() {
 
     private fun scanDtc() {
         val dev = findElmDevice() ?: return
-        tvStatus.text = "⏳ Сканирование ошибок..."
+        appendStatus("\n─── Сканирование ошибок ───")
         tvDtcStatus.visibility = android.view.View.GONE
-        startTimer("DtcTimer", "⏳ Сканирование ошибок")
+        val timer = startTimer()
+        val t0 = System.currentTimeMillis()
         thread(name = "DtcScan", isDaemon = true) {
             val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
             val r = checker.scanDtc()
+            timer.set(false)
+            val elapsed = (System.currentTimeMillis() - t0) / 1000
             runOnUiThread {
                 if (r == null) {
-                    val log = checker.getLog()
-                    tvStatus.text = "❌ ELM не отвечает\n\nЛог:\n$log"
+                    appendStatus("\n❌ ELM не отвечает [${elapsed}с]")
+                    appendStatus("\nЛог: ${checker.getLog()}")
                 } else {
                     dtcCodes = r
                     dtcChecked = true
                     if (r.isEmpty()) {
-                        tvStatus.text = "✅ Ошибок нет"
+                        appendStatus("\n✅ Ошибок нет [${elapsed}с]")
                     } else {
-                        tvStatus.text = "⚠️ Обнаружены ошибки (${r.size}):\n${
-                            r.joinToString(", ")
-                        }"
+                        appendStatus("\n⚠️ Обнаружены ошибки (${r.size}): ${r.joinToString(", ")} [${elapsed}с]")
                     }
                     btnScript.isEnabled = true
                     tvDtcStatus.text = "✅ Ошибки считаны — можно диагностировать"
@@ -244,27 +245,37 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkElm() {
         val dev = findElmDevice() ?: return
-        tvStatus.text = "⏳ Опрос ELM..."
-        startTimer("ElmTimer", "⏳ Опрос ELM")
+        appendStatus("\n─── Опрос ELM327 ───")
+        val timer = startTimer()
+        val t0 = System.currentTimeMillis()
         thread(name = "ElmCheck", isDaemon = true) {
             val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
             val r = checker.checkDevice()
+            timer.set(false)
+            val elapsed = (System.currentTimeMillis() - t0) / 1000
             runOnUiThread {
                 if (r == null) {
-                    val log = checker.getLog()
-                    tvStatus.text = "❌ ELM не отвечает\n\nЛог:\n$log"
+                    appendStatus("\n❌ ELM не отвечает [${elapsed}с]")
+                    appendStatus("\nЛог: ${checker.getLog()}")
                 } else {
                     elmChecker = checker  // сохраняем для ЭБУ
-                    val deviceLine = if (r.deviceId != "—") "🔹 Устройство: ${r.deviceId}\n" else ""
+                    val deviceLine = if (r.deviceId != "—") "\n🔹 Устройство: ${r.deviceId}" else ""
                     val good = r.hasAdaptive && r.version.contains("v2")
-                    tvStatus.text = if (good) {
-                        "✅ Чёткое устройство!\n\n${deviceLine}" +
-                        "🔹 Версия: ${r.version}\n🔹 Протокол: ${r.protocol}\n" +
-                        "🔹 Напряжение: ${r.voltage}\n🔹 Адаптивный тайминг: ✅\n"
+                    val result = if (good) {
+                        "\n✅ Чёткое устройство! [${elapsed}с]" +
+                        "${deviceLine}" +
+                        "\n🔹 Версия: ${r.version}" +
+                        "\n🔹 Протокол: ${r.protocol}" +
+                        "\n🔹 Напряжение: ${r.voltage}" +
+                        "\n🔹 Адаптивный тайминг: ✅"
                     } else {
-                        "⚠️ Клон или слабый ELM327\n\n${deviceLine}" +
-                        "🔹 Версия: ${r.version}\n🔹 Протокол: ${r.protocol}\n🔹 Адаптивный тайминг: ❌\n"
+                        "\n⚠️ Клон или слабый ELM327 [${elapsed}с]" +
+                        "${deviceLine}" +
+                        "\n🔹 Версия: ${r.version}" +
+                        "\n🔹 Протокол: ${r.protocol}" +
+                        "\n🔹 Адаптивный тайминг: ❌"
                     }
+                    appendStatus(result)
                 }
             }
         }
@@ -273,44 +284,57 @@ class MainActivity : AppCompatActivity() {
     private fun checkEcu() {
         val checker = elmChecker
         if (checker == null) {
-            tvStatus.text = "⚠️ Сначала нажми \"🔌 ELM\""
+            appendStatus("\n⚠️ Сначала нажми \"🔌 ELM\"")
             return
         }
-        tvStatus.text = "⏳ Опрос ЭБУ..."
-        startTimer("EcuTimer", "⏳ Опрос ЭБУ")
+        appendStatus("\n─── Опрос ЭБУ ───")
+        val timer = startTimer()
+        val t0 = System.currentTimeMillis()
         thread(name = "EcuCheck", isDaemon = true) {
             val r = checker.checkEcu()
+            timer.set(false)
+            val elapsed = (System.currentTimeMillis() - t0) / 1000
             runOnUiThread {
                 val obd = if (r.supportsObd) "✅" else "❌"
-                tvStatus.text = "🚗 ЭБУ: OBD $obd, PID: ${r.pidMask}" +
-                    if (r.vin != null) "\n🔹 VIN: ${r.vin}" else "\n🔹 VIN: не определился"
+                appendStatus("\n🚗 ЭБУ: OBD $obd, PID: ${r.pidMask} [${elapsed}с]" +
+                    if (r.vin != null) "\n🔹 VIN: ${r.vin}" else "\n🔹 VIN: не определился")
             }
         }
     }
 
     private fun findElmDevice(): BluetoothDevice? {
-        if (btAdapter == null) { tvStatus.text = "❌ BT не поддерживается"; return null }
-        if (!btAdapter!!.isEnabled) { tvStatus.text = "❌ Включите Bluetooth"; return null }
+        if (btAdapter == null) { appendStatus("\n❌ BT не поддерживается"); return null }
+        if (!btAdapter!!.isEnabled) { appendStatus("\n❌ Включите Bluetooth"); return null }
         val paired = btAdapter!!.bondedDevices
         val names = paired.map { it.name }.joinToString(", ")
         val dev = paired.find { it.name.uppercase().let { n -> n.contains("OBD") || n.contains("ELM") || n.contains("CBT") || n.contains("V-LINK") || n.contains("VLINK") || n.contains("ANDROID-VLINK") || n.contains("BTSCAN") || n.contains("CARBT") || n.contains("AUTO") } }
-        if (dev == null) tvStatus.text = "❌ ELM не найден\nСопряжено: ${paired.size} шт.\nИмена: $names"
+        if (dev == null) appendStatus("\n❌ ELM не найден\nСопряжено: ${paired.size} шт.\nИмена: $names")
         return dev
     }
 
-    private fun startTimer(name: String, label: String) {
+    /** Запускает тикающий таймер в отдельной строке. Возвращает флаг для остановки. */
+    private fun startTimer(): java.util.concurrent.atomic.AtomicBoolean {
         val running = java.util.concurrent.atomic.AtomicBoolean(true)
-        thread(name = name, isDaemon = true) {
+        appendStatus(" ⏳")
+        thread(name = "Timer", isDaemon = true) {
             var sec = 0
             while (running.get()) {
                 Thread.sleep(1000)
                 sec++
                 runOnUiThread {
-                    if (running.get() && tvStatus.text?.startsWith("⏳") == true)
-                        tvStatus.text = "$label... [${sec}с]"
+                    if (running.get()) {
+                        // Обновляем последний символ — заменяем "⏳" на "⏳ ${sec}с"
+                        val current = tvStatus.text.toString()
+                        val lastNewline = current.lastIndexOf('\n')
+                        if (lastNewline >= 0) {
+                            val before = current.substring(0, lastNewline + 1)
+                            tvStatus.text = "$before ⏳ ${sec}с"
+                        }
+                    }
                 }
             }
         }
+        return running
     }
 
     private fun registerScriptReceiver() {
