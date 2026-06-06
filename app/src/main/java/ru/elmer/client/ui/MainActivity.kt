@@ -117,7 +117,7 @@ class MainActivity : AppCompatActivity() {
 
         btnSend.setOnClickListener { sendToLlm() }
         btnClose.setOnClickListener {
-            tvStatus.text = "Готов"
+            appendStatus("\nГотов")
             btnClose.visibility = android.view.View.GONE
         }
 
@@ -161,28 +161,28 @@ class MainActivity : AppCompatActivity() {
             val now = System.currentTimeMillis()
             val throttle = if (lastPingOk) PING_OK_THROTTLE_MS else PING_THROTTLE_MS
             if (now - lastPingTime < throttle) {
-                ui { appendStatus("⏱ Сервер: проверка не чаще ${throttle/1000}с") }
+                ui { appendStatus("\n⏱ Сервер: проверка не чаще ${throttle/1000}с") }
                 return@thread
             }
             lastPingTime = now
-            ui { appendStatus("📡 Сервер...") }
+            ui { appendStatus("\n📡 Сервер...") }
             val ping = client.ping()
             if (ping.ok) {
                 lastPingOk = true
-                ui { appendStatus("✅ Сервер: ${ping.ms}мс") }
+                ui { appendStatus("\n✅ Сервер: ${ping.ms}мс") }
             } else {
                 lastPingOk = false
-                ui { appendStatus("❌ Сервер: ${ping.error}") }
+                ui { appendStatus("\n❌ Сервер: ${ping.error}") }
                 return@thread
             }
 
             // Этап 2: LLM
-            ui { appendStatus("🧠 LLM...") }
+            ui { appendStatus("\n🧠 LLM...") }
             val llm = client.pingLlm()
             if (llm.ok) {
-                ui { appendStatus("✅ LLM: ${llm.ms}мс") }
+                ui { appendStatus("\n✅ LLM: ${llm.ms}мс") }
             } else {
-                ui { appendStatus("⚠️ LLM: ${llm.error}") }
+                ui { appendStatus("\n⚠️ LLM: ${llm.error}") }
             }
         }
     }
@@ -312,10 +312,10 @@ class MainActivity : AppCompatActivity() {
         return dev
     }
 
-    /** Запускает тикающий таймер в отдельной строке. Возвращает флаг для остановки. */
+    /** Запускает тикающий таймер на отдельной строке. Возвращает флаг для остановки. */
     private fun startTimer(): java.util.concurrent.atomic.AtomicBoolean {
         val running = java.util.concurrent.atomic.AtomicBoolean(true)
-        appendStatus(" ⏳")
+        appendStatus("\n⏳")  // своя строка, чтобы не съесть заголовок
         thread(name = "Timer", isDaemon = true) {
             var sec = 0
             while (running.get()) {
@@ -323,12 +323,12 @@ class MainActivity : AppCompatActivity() {
                 sec++
                 runOnUiThread {
                     if (running.get()) {
-                        // Обновляем последний символ — заменяем "⏳" на "⏳ ${sec}с"
+                        // Обновляем только последнюю строку (таймерную)
                         val current = tvStatus.text.toString()
                         val lastNewline = current.lastIndexOf('\n')
                         if (lastNewline >= 0) {
                             val before = current.substring(0, lastNewline + 1)
-                            tvStatus.text = "$before ⏳ ${sec}с"
+                            tvStatus.text = "$before⏳ ${sec}с"
                         }
                     }
                 }
@@ -435,7 +435,7 @@ class MainActivity : AppCompatActivity() {
         val db = SessionDb(this)
         val sessions = db.getSessions()
         if (sessions.isEmpty()) {
-            tvStatus.text = "📋 История пуста"
+            appendStatus("\n📋 История пуста")
             return
         }
 
@@ -458,7 +458,7 @@ class MainActivity : AppCompatActivity() {
             .setTitle("📋 История (${recent.size})")
             .setItems(items) { _, which ->
                 // Показать полный диагноз
-                tvStatus.text = "📋 ${items[which]}\n\n${diagnoses[which]}"
+                appendStatus("\n📋 ${items[which]}\n\n${diagnoses[which]}")
                 btnClose.setOnClickListener {
                     btnClose.visibility = android.view.View.GONE
                     showHistory()
