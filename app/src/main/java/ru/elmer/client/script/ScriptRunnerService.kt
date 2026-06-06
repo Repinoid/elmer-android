@@ -283,6 +283,17 @@ class ScriptRunnerService : Service() {
             info["android_id"] = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
         } catch (_: Exception) {}
 
+        // UUID приложения (не сбрасывается при обновлении)
+        try {
+            val prefs = getSharedPreferences("elmer", 0)
+            var uuid = prefs.getString("device_uuid", null)
+            if (uuid == null) {
+                uuid = java.util.UUID.randomUUID().toString()
+                prefs.edit().putString("device_uuid", uuid).apply()
+            }
+            info["device_uuid"] = uuid
+        } catch (_: Exception) {}
+
         // ELM327
         info["elm_mac"] = elmMac
         info["elm_bt_name"] = elmBtName
