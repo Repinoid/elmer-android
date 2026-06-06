@@ -281,15 +281,16 @@ class MainActivity : AppCompatActivity() {
         if (!btAdapter!!.isEnabled) { tvStatus.text = "❌ Включите Bluetooth"; return null }
         val paired = btAdapter!!.bondedDevices
         val names = paired.map { it.name }.joinToString(", ")
-        val dev = paired.find { it.name.uppercase().let { n -> n.contains("OBD") || n.contains("ELM") || n.contains("CBT") || n.contains("V-LINK") } }
+        val dev = paired.find { it.name.uppercase().let { n -> n.contains("OBD") || n.contains("ELM") || n.contains("CBT") || n.contains("V-LINK") || n.contains("VLINK") || n.contains("ANDROID-VLINK") || n.contains("BTSCAN") || n.contains("CARBT") || n.contains("AUTO") } }
         if (dev == null) tvStatus.text = "❌ ELM не найден\nСопряжено: ${paired.size} шт.\nИмена: $names"
         return dev
     }
 
     private fun startTimer(name: String, label: String) {
+        val running = java.util.concurrent.atomic.AtomicBoolean(true)
         thread(name = name, isDaemon = true) {
             var sec = 0
-            while (true) {
+            while (running.get()) {
                 Thread.sleep(1000)
                 sec++
                 runOnUiThread {
