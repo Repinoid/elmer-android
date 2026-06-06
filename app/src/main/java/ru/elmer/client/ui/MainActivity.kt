@@ -380,6 +380,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         try { unregisterReceiver(scriptStatusReceiver) } catch (_: Exception) {}
         try { unregisterReceiver(scriptStageReceiver) } catch (_: Exception) {}
+        scriptRegistered = false  // сброс для перерегистрации после поворота
         super.onDestroy()
     }
 
