@@ -129,11 +129,11 @@ class ElmChecker(
         return codes
     }
 
-    /** Полный цикл: подключение → прибор → ЭБУ */
+    /** Полный цикл: подключение → прибор → ЭБУ (checkDevice сам подключается) */
     fun run(): Result {
         log("🔌 Подключение к ${device.name} (${device.address})...")
-        if (!connectAndInit()) return failResult("нет соединения")
 
+        // checkDevice() сам вызывает connectAndInit() — двойной вызов не нужен
         val deviceInfo = checkDevice() ?: return failResult("нет данных")
 
         val ecuData = checkEcu()
@@ -180,7 +180,17 @@ class ElmChecker(
         }
     }
 
+    /**
+     * Создать BT-сокет и подключиться.
+     * Если сокет уже открыт — повторно не подключается (идемпотентность).
+     */
     private fun connect() {
+        // Уже подключены — не дёргаем повторно
+        if (socket?.isConnected == true) return
+
+        // На всякий случай закроем старый сокет, если он есть, но не connected
+        try { socket?.close() } catch (_: Exception) {}
+
         try {
             val s = device.createRfcommSocketToServiceRecord(SPP_UUID)
             adapter.cancelDiscovery()
