@@ -36,7 +36,30 @@
         android:textColor="#ffffff"
         android:backgroundTint="#2196F3"
         android:padding="14dp"
-        android:layout_marginBottom="4dp" />
+        android:layout_marginBottom="2dp"
+        android:enabled="false" />
+
+    <Button
+        android:id="@+id/btn_dtc"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="⚠️ ОШИБКИ"
+        android:textSize="16sp"
+        android:textColor="#ffffff"
+        android:backgroundTint="#FF5722"
+        android:padding="12dp"
+        android:layout_marginBottom="2dp" />
+
+    <TextView
+        android:id="@+id/tv_dtc_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="👆 Сначала считай ошибки"
+        android:textSize="10sp"
+        android:textColor="#FF5722"
+        android:gravity="center"
+        android:layout_marginBottom="4dp"
+        android:visibility="visible" />
 
     <CheckBox
         android:id="@+id/cb_full_mode"

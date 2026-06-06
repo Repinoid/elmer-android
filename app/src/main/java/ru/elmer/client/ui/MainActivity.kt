@@ -30,6 +30,8 @@ import ru.elmer.client.script.ScriptRunnerService
 class MainActivity : AppCompatActivity() {
 
     private lateinit var btnScript: Button
+    private lateinit var btnDtc: Button
+    private lateinit var tvDtcStatus: TextView
     private lateinit var btnHistory: Button
     private lateinit var btnCheckElm: Button
     private lateinit var btnCheckEcu: Button
@@ -82,11 +84,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnScript = findViewById(R.id.btn_script)
+        btnDtc = findViewById(R.id.btn_dtc)
+        tvDtcStatus = findViewById(R.id.tv_dtc_status)
         cbFullMode = findViewById(R.id.cb_full_mode)
         btnHistory = findViewById(R.id.btn_history)
         btnCheckElm = findViewById(R.id.btn_check_elm)
         btnCheckEcu = findViewById(R.id.btn_check_ecu)
 
+        btnDtc.setOnClickListener { scanDtc() }
         btnHistory.setOnClickListener { showHistory() }
         btnCheckElm.setOnClickListener { checkElm() }
         btnCheckEcu.setOnClickListener { checkEcu() }
@@ -189,7 +194,40 @@ class MainActivity : AppCompatActivity() {
         registerScriptReceiver()
     }
 
-    // ── Проверка ELM327 (прибор) ───────────────────────────
+    // ── Сканирование ошибок ────────────────────────────────
+
+    private var dtcCodes = listOf<String>()
+    private var dtcChecked = false
+
+    private fun scanDtc() {
+        val dev = findElmDevice() ?: return
+        tvStatus.text = "⏳ Сканирование ошибок..."
+        tvDtcStatus.visibility = android.view.View.GONE
+        startTimer("DtcTimer", "⏳ Сканирование ошибок")
+        thread(name = "DtcScan", isDaemon = true) {
+            val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
+            val r = checker.scanDtc()
+            runOnUiThread {
+                if (r == null) {
+                    tvStatus.text = "❌ ELM не отвечает"
+                } else {
+                    dtcCodes = r
+                    dtcChecked = true
+                    if (r.isEmpty()) {
+                        tvStatus.text = "✅ Ошибок нет"
+                    } else {
+                        tvStatus.text = "⚠️ Обнаружены ошибки (${r.size}):\n${
+                            r.joinToString(", ")
+                        }"
+                    }
+                    btnScript.isEnabled = true
+                    tvDtcStatus.text = "✅ Ошибки считаны — можно диагностировать"
+                    tvDtcStatus.setTextColor(0xFF4CAF50.toInt())
+                    tvDtcStatus.visibility = android.view.View.VISIBLE
+                }
+            }
+        }
+    }
 
     private fun checkElm() {
         val dev = findElmDevice() ?: return

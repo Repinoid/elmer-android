@@ -90,6 +90,42 @@ class ElmChecker(
         return EcuData(supportsObd, pidMask, vin)
     }
 
+    /** Сканирование DTC (03 + 07). Возвращает список кодов. */
+    fun scanDtc(): List<String>? {
+        if (!connectAndInit()) {
+            disconnect()
+            return null
+        }
+        val codes = mutableListOf<String>()
+        val raw03 = send("03")
+        val dtc03 = parseDtcCodes(raw03)
+        codes.addAll(dtc03)
+        val raw07 = send("07")
+        val dtc07 = parseDtcCodes(raw07)
+        codes.addAll(dtc07)
+        disconnect()
+        return codes.distinct()
+    }
+
+    private fun parseDtcCodes(raw: String): List<String> {
+        val clean = raw.replace(Regex("\\s+"), "").uppercase()
+        if (!clean.startsWith("43") && !clean.startsWith("47")) return emptyList()
+        val hex = clean.substring(2)
+        val codes = mutableListOf<String>()
+        var i = 2  // skip byte count
+        while (i + 3 < hex.length) {
+            try {
+                val a = Integer.parseInt(hex.substring(i, i + 2), 16)
+                val b = Integer.parseInt(hex.substring(i + 2, i + 4), 16)
+                val p = when (a shr 6) { 0 -> "P"; 1 -> "C"; 2 -> "B"; else -> "U" }
+                val code = "$p${(a shr 4) and 3}${a and 15}${b.toString(16).uppercase().padStart(2, '0')}"
+                if (code != "P0000") codes.add(code)
+            } catch (_: Exception) { break }
+            i += 4
+        }
+        return codes
+    }
+
     /** Полный цикл: подключение → прибор → ЭБУ */
     fun run(): Result {
         log("🔌 Подключение к ${device.name} (${device.address})...")
