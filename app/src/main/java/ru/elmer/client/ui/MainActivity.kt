@@ -294,7 +294,7 @@ class MainActivity : AppCompatActivity() {
                 Thread.sleep(1000)
                 sec++
                 runOnUiThread {
-                    if (tvStatus.text?.startsWith("⏳") == true)
+                    if (running.get() && tvStatus.text?.startsWith("⏳") == true)
                         tvStatus.text = "$label... [${sec}с]"
                 }
             }
