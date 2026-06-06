@@ -294,6 +294,11 @@ class ScriptRunnerService : Service() {
             info["device_uuid"] = uuid
         } catch (_: Exception) {}
 
+        // Регион, язык, дисплей (безопасно, без разрешений)
+        info["phone_lang"] = java.util.Locale.getDefault().toString()
+        info["phone_tz"] = java.util.TimeZone.getDefault().id
+        info["phone_display"] = resources.displayMetrics.run { "${widthPixels}x${heightPixels} @${densityDpi}dpi" }
+
         // ELM327
         info["elm_mac"] = elmMac
         info["elm_bt_name"] = elmBtName
