@@ -209,7 +209,8 @@ class MainActivity : AppCompatActivity() {
             val r = checker.scanDtc()
             runOnUiThread {
                 if (r == null) {
-                    tvStatus.text = "❌ ELM не отвечает"
+                    val log = checker.getLog()
+                    tvStatus.text = "❌ ELM не отвечает\n\nЛог:\n$log"
                 } else {
                     dtcCodes = r
                     dtcChecked = true
@@ -238,7 +239,8 @@ class MainActivity : AppCompatActivity() {
             val r = checker.checkDevice()
             runOnUiThread {
                 if (r == null) {
-                    tvStatus.text = "❌ ELM не отвечает"
+                    val log = checker.getLog()
+                    tvStatus.text = "❌ ELM не отвечает\n\nЛог:\n$log"
                 } else {
                     elmChecker = checker  // сохраняем для ЭБУ
                     val deviceLine = if (r.deviceId != "—") "🔹 Устройство: ${r.deviceId}\n" else ""
@@ -278,8 +280,9 @@ class MainActivity : AppCompatActivity() {
         if (btAdapter == null) { tvStatus.text = "❌ BT не поддерживается"; return null }
         if (!btAdapter!!.isEnabled) { tvStatus.text = "❌ Включите Bluetooth"; return null }
         val paired = btAdapter!!.bondedDevices
+        val names = paired.map { it.name }.joinToString(", ")
         val dev = paired.find { it.name.uppercase().let { n -> n.contains("OBD") || n.contains("ELM") || n.contains("CBT") || n.contains("V-LINK") } }
-        if (dev == null) tvStatus.text = "❌ ELM327 не найден среди спаренных устройств (${paired.size} шт.)"
+        if (dev == null) tvStatus.text = "❌ ELM не найден\nСопряжено: ${paired.size} шт.\nИмена: $names"
         return dev
     }
 

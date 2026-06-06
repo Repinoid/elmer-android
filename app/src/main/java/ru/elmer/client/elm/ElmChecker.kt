@@ -58,6 +58,8 @@ class ElmChecker(
     )
 
     private val logLines = mutableListOf<String>()
+
+    fun getLog(): String = logLines.joinToString("\n")
     private var socket: BluetoothSocket? = null
     private var elm: ElmProtocol? = null
 
