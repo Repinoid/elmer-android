@@ -65,21 +65,33 @@ class ElmChecker(
 
     // ── Публичные методы ────────────────────────────────
 
-    /** Этап 1: только AT-команды, зажигание НЕ нужно */
+    /** Этап 1: AT-команды. v1.5 клоны — только базовые (ATI, ATDP, ATRV). */
     fun checkDevice(): DeviceInfo? {
         if (!connectAndInit()) return null
+
+        // ATI — версия (работает на всех)
         val ati = send("ATI")
         val version = parseVersion(ati)
-        val at1 = send("AT@1")
-        val hasDeviceId = at1.length > 3 && at1 != "OK" && !at1.startsWith("?")
-        val at2 = send("AT@2")
-        val deviceId = cleanAt2(at2)
+        val isV2 = version.contains("v2", ignoreCase = true)
+
+        // AT@1, AT@2 — только для v2+ (v1.5 не понимает)
+        val deviceId: String
+        if (isV2) {
+            val at2 = send("AT@2")
+            deviceId = cleanAt2(at2)
+        } else {
+            deviceId = "—"
+        }
+
         val dp = send("ATDP")
         val protocol = if (dp.length > 3 && dp != "OK") dp.take(60) else dp
+
         val rv = send("ATRV")
         val voltage = if (rv.contains("V", ignoreCase = true) || rv.matches(Regex("[0-9.]+"))) rv else "—"
-        val at1r = send("ATAT1")
-        val hasAdaptive = at1r == "OK"
+
+        // ATAT1 — только для v2+ (v1.5 не поддерживает)
+        val hasAdaptive = if (isV2) send("ATAT1") == "OK" else false
+
         return DeviceInfo(version, deviceId, protocol, voltage, hasAdaptive)
     }
 

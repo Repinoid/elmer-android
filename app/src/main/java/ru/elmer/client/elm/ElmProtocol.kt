@@ -42,17 +42,18 @@ class ElmProtocol(
 
     // ── Инициализация ─────────────────────────────────────
 
-    /** ATSP0→ATAT1→ATS0→ATL0→ATE0 */
+    /** ATSP0→ATAT1(быстрый)→ATS0→ATL0→ATE0. Без ретраев — макс 20с. */
     fun init() {
         Log.i(TAG, "init start")
         state = State.INITIALIZING
 
-        exec("ATSP0", INIT_TIMEOUT)
-        exec("ATAT1", DEF_TIMEOUT * 5)
+        write("ATSP0"); tryRead(4000); drainInput()
+        // ATAT1 — v1.5 клоны не поддерживают, не ждём
+        write("ATAT1"); tryRead(2000); drainInput()
         updateAtst()
-        exec("ATS0", DEF_TIMEOUT * 5)
-        exec("ATL0", DEF_TIMEOUT * 5)
-        exec("ATE0", DEF_TIMEOUT * 5)
+        write("ATS0"); tryRead(2000); drainInput()
+        write("ATL0"); tryRead(2000); drainInput()
+        write("ATE0"); tryRead(2000); drainInput()
 
         state = State.READY
         Log.i(TAG, "ready")
@@ -103,20 +104,20 @@ class ElmProtocol(
                 Log.w(TAG, "BUS ERROR: ${raw.take(60)}")
                 state = State.DISCONNECTED
                 resetTimeout(); updateAtst()
-                write("ATPC"); tryRead(5000)
-                write("ATSP0"); tryRead(5000)
+                write("ATPC"); tryRead(3000)
+                write("ATSP0"); tryRead(3000)
             }
 
             u.startsWith("ERROR") && !u.startsWith("DATA ERROR") -> {
                 Log.w(TAG, "ERROR — warm start")
                 state = State.ERROR
-                write("ATWS"); tryRead(5000)
+                write("ATWS"); tryRead(3000)
             }
 
             isDataError(u) -> {
                 Log.w(TAG, "data error — warm start")
                 state = State.ERROR
-                write("ATWS"); tryRead(5000)
+                write("ATWS"); tryRead(3000)
             }
 
             else -> decreaseTimeout()
@@ -124,22 +125,28 @@ class ElmProtocol(
         return raw
     }
 
+    /** Быстрое восстановление — макс 6с */
     private fun recover() {
         Log.i(TAG, "recovering...")
         state = State.INITIALIZING
-        write("ATWS"); tryRead(5000)
-        write("ATSP0"); tryRead(5000)
-        write("ATE0"); tryRead(5000)
+        write("ATWS"); tryRead(2000); drainInput()
+        write("ATSP0"); tryRead(2000); drainInput()
+        write("ATE0"); tryRead(2000); drainInput()
         state = State.READY
     }
 
     // ── Побайтовое чтение ─────────────────────────────────
 
     private fun write(cmd: String) {
-        while (input.available() > 0) input.read()   // дренаж хвостов
+        drainInput()
         output.write((cmd + "\r").toByteArray())
         output.flush()
         Log.d(TAG, "→ $cmd")
+    }
+
+    /** Очистить входной буфер от мусора */
+    private fun drainInput() {
+        while (input.available() > 0) input.read()
     }
 
     @Throws(TimeoutException::class)
@@ -188,10 +195,12 @@ class ElmProtocol(
 
     private fun resetTimeout() { timeoutMs = DEF_TIMEOUT }
 
+    /** ATST с коротким таймаутом (v1.5 не поддерживает) */
     private fun updateAtst() {
         val v = (timeoutMs / TIMEOUT_RES).toInt().coerceAtLeast(1)
         write("ATST${v.toString(16).uppercase().padStart(2, '0')}")
-        tryRead(5000)
+        tryRead(2000)
+        drainInput()
     }
 
     // ── Классификация ошибок ──────────────────────────────
