@@ -456,6 +456,7 @@ class MainActivity : AppCompatActivity() {
     // ── Динамический тест ────────────────────────────────
 
     private var dynamicCollector: ru.elmer.client.script.DynamicCollector? = null
+    private var dynamicSamples: MutableList<List<ru.elmer.client.script.DynamicCollector.SampleResponse>>? = null
 
     private fun startDynamicTest(mode: String) {
         val dev = elmDevice ?: findElmDevice() ?: return
@@ -468,7 +469,6 @@ class MainActivity : AppCompatActivity() {
             appendStatus("\n\n🚗 ТЕСТ В ДВИЖЕНИИ")
             appendStatus("\n⚠️ Остановитесь. Нажмите СТАРТ ДО начала движения.")
             appendStatus("\n⚠️ Ничего не нажимайте в движении — программа пишет сама.")
-            appendStatus("\n⚠️ Включите 2-ю передачу, ~3000 об/мин, затем сбросьте газ.")
             appendStatus("\n⚠️ После полной остановки нажмите СТОП.")
         } else {
             appendStatus("\n\n⏱ ТЕСТ НА МЕСТЕ")
@@ -477,14 +477,12 @@ class MainActivity : AppCompatActivity() {
             appendStatus("\n⚠️ Нажмите СТОП после завершения.")
         }
 
-        // Превращаем кнопки в СТАРТ
+        // Превращаем кнопку в СТАРТ
         dynamicButtons.visibility = android.view.View.GONE
         btnScript.text = "▶ СТАРТ $label"
         btnScript.isEnabled = true
         btnScript.visibility = android.view.View.VISIBLE
-        findViewById<LinearLayout>(R.id.top_buttons).visibility = android.view.View.VISIBLE
 
-        // Флаг чтобы отличить повторное нажатие
         var started = false
 
         btnScript.setOnClickListener {
@@ -497,7 +495,6 @@ class MainActivity : AppCompatActivity() {
 
                 thread(name = "DynamicTest", isDaemon = true) {
                     try {
-                        // Скачиваем скрипт dynamic
                         val client = ru.elmer.client.server.ServerClient(
                             "https://obdai.ru",
                             "https://obdai.ru/api/v1/script?mode=dynamic",
@@ -514,7 +511,6 @@ class MainActivity : AppCompatActivity() {
                             )
                         }
 
-                        // Подключаемся к ELM если ещё нет
                         val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
                         if (!checker.isConnected()) {
                             ui { appendStatus("\n⏳ Подключение к ELM...") }
@@ -525,49 +521,19 @@ class MainActivity : AppCompatActivity() {
 
                         val timer = startTimer()
                         val collector = ru.elmer.client.script.DynamicCollector(
-                            elm = elmProto,
-                            steps = steps,
-                            intervalMs = interval,
+                            elm = elmProto, steps = steps, intervalMs = interval,
                             onSample = { idx -> ui { appendStatus("\r📊 ${idx + 1} отсчётов") } },
-                            onLog = { }  // не спамим
+                            onLog = { }
                         )
                         dynamicCollector = collector
                         collector.start()
 
-                        // Ждём СТОП
-                        while (started && collector.isRunning()) {
-                            Thread.sleep(200)
-                        }
+                        while (started && collector.isRunning()) Thread.sleep(200)
                         val samples = collector.stop()
                         timer.set(false)
 
-                        val totalCount = samples.sumOf { it.size }
-                        ui { appendStatus("\n📊 Записано: ${samples.size} отсчётов ($totalCount ответов)") }
-
-                        // Сохраняем в БД и отправляем
-                        ui { appendStatus("\n📤 Отправка на сервер...") }
-                        val db = SessionDb(this@MainActivity)
-                        val sid = db.createSession(scriptJson, "Динамический тест", "https://obdai.ru")
-                        samples.forEachIndexed { i, batch ->
-                            batch.forEach { r ->
-                                db.addResponse(sid, "sample_$i", r.cmd, r.raw, r.decoded)
-                            }
-                        }
-                        val allResponses = db.getResponses(sid)
-                        val clientInfo = buildSimpleClientInfo()
-                        val uploadResp = client.uploadSession(sid, allResponses, clientInfo, "")
-                        if (uploadResp != null) {
-                            db.markUploaded(sid)
-                            val d = uploadResp.optString("diagnosis", "")
-                            if (d.isNotEmpty()) {
-                                ui {
-                                    appendStatus("\n🩺 Диагноз:")
-                                    d.chunked(60).forEach { appendStatus(it.trim()) }
-                                }
-                            }
-                        } else {
-                            ui { appendStatus("\n⚠️ Сервер недоступен. Данные сохранены локально.") }
-                        }
+                        dynamicSamples = samples.toMutableList()
+                        ui { appendStatus("\n📊 Записано: ${samples.size} отсчётов") }
                     } catch (e: Exception) {
                         ui { appendStatus("\n❌ ${e.message}") }
                     }
@@ -575,19 +541,12 @@ class MainActivity : AppCompatActivity() {
             } else {
                 // СТОП
                 started = false
-                appendStatus("\n⏹ Запись остановлена")
+                appendStatus("\n⏹ Запись завершена")
                 btnScript.visibility = android.view.View.GONE
                 dynamicButtons.visibility = android.view.View.VISIBLE
             }
         }
     }
-
-    private fun buildSimpleClientInfo(): Map<String, String> {
-        val info = mutableMapOf<String, String>()
-        info["phone_model"] = android.os.Build.MODEL
-        info["phone_maker"] = android.os.Build.MANUFACTURER
-        info["android_version"] = android.os.Build.VERSION.RELEASE
-        info["script_mode"] = "dynamic"
         try { info["app_version"] = packageManager.getPackageInfo(packageName, 0).versionName } catch (_: Exception) {}
         return info
     }
