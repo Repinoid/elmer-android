@@ -127,10 +127,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun startChecks() {
         thread(name = "StartChecks", isDaemon = true) {
-            checkServer()
-            checkElm()
-            if (indServer.text.contains("🟢")) checkLlm()
-            if (indElm.text.contains("🟢")) checkEcu()
+            checkServer()  // сама вызовет checkLlm если 🟢
+            checkElm()     // сама вызовет checkEcu если 🟢
         }
     }
 
@@ -312,13 +310,14 @@ class MainActivity : AppCompatActivity() {
                 ui { appendStatus("\n📊 Записано: ${samples.size} отсчётов") }
                 ui { appendStatus("\nНажмите ➤ для отправки на сервер.") }
             } catch (e: Exception) {
+                timer.set(false)
                 ui { appendStatus("\n❌ ${e.message}") }
             }
         }
     }
 
     private fun stopDynamicRecording() {
-        state = State.STOP
+        dynamicCollector?.let { if (it.isRunning()) { state = State.STOP } }
         appendStatus("\n⏹ Запись завершена")
         setActionState(State.DIAG)
     }
