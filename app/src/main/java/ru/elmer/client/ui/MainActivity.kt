@@ -270,6 +270,9 @@ private fun checkEcu() {
             }
         }
         ContextCompat.startForegroundService(this, intent)
+        // Освобождаем BT — сервис подключится сам
+        elmChecker?.close()
+        elmChecker = null
         tvStatus.text = ""
         appendStatus("⏳ Диагностика...")
         dynamicSamples = null
