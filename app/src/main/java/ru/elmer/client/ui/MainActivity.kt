@@ -518,6 +518,8 @@ class MainActivity : AppCompatActivity() {
 
         // Превращаем кнопку в СТАРТ
         dynamicButtons.visibility = android.view.View.GONE
+        // Показываем верхнюю панель с кнопками (скрыта после done)
+        findViewById<LinearLayout>(R.id.top_buttons).visibility = android.view.View.VISIBLE
         btnScript.text = "▶ СТАРТ $label"
         btnScript.isEnabled = true
         btnScript.visibility = android.view.View.VISIBLE
