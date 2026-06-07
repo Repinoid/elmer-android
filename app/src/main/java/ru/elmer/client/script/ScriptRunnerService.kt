@@ -189,7 +189,7 @@ class ScriptRunnerService : Service() {
             try {
                 val m = dev.javaClass.getMethod("createRfcommSocket", Int::class.java)
                 val s = m.invoke(dev, 1) as BluetoothSocket; s.connect(); return s
-            } catch (e2: Exception) { throw IOException("BT fallback: ${e2.message}", e2) }
+            } catch (e2: Exception) { throw IOException("не удалось подключиться к ELM327", e2) }
         }
     }
 

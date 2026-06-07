@@ -28,16 +28,25 @@ class UploadProgress(
     fun start() {
         running.set(true)
         val startTime = System.currentTimeMillis()
+        // Первое сообщение сразу
+        val intent = Intent(ScriptRunnerService.BROADCAST_STAGE).apply {
+            putExtra("stage", "upload")
+            putExtra("detail", "Отправка ${responseCount} отв. (${dataSizeKB}KB)...")
+            setPackage(packageName)
+        }
+        context.sendBroadcast(intent)
+        // Дальше — каждые 3 секунды (не спамим)
         thread(name = "UploadTimer", isDaemon = true) {
             while (running.get()) {
+                Thread.sleep(3000)
+                if (!running.get()) break
                 val elapsed = (System.currentTimeMillis() - startTime) / 1000
-                val intent = Intent(ScriptRunnerService.BROADCAST_STAGE).apply {
+                val intent2 = Intent(ScriptRunnerService.BROADCAST_STAGE).apply {
                     putExtra("stage", "upload")
-                    putExtra("detail", "Отправка ${responseCount} отв. (${dataSizeKB}KB)... [${elapsed}с]")
+                    putExtra("detail", "Отправка... [${elapsed}с]")
                     setPackage(packageName)
                 }
-                context.sendBroadcast(intent)
-                Thread.sleep(1000)
+                context.sendBroadcast(intent2)
             }
         }
     }

@@ -11,6 +11,7 @@ import android.os.IBinder
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -39,8 +40,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cbFullMode: CheckBox
     private lateinit var tvStatus: TextView
     private lateinit var tvPrompt: TextView
-    private lateinit var etInput: EditText
-    private lateinit var etCarInfo: EditText
+    private lateinit var etUserInput: EditText
     private lateinit var btnSend: Button
     private lateinit var btnClose: Button
     private lateinit var scrollOutput: ScrollView
@@ -109,8 +109,7 @@ class MainActivity : AppCompatActivity() {
         btnCheckEcu.setOnClickListener { checkEcu() }
         tvStatus = findViewById(R.id.tv_status)
         tvPrompt = findViewById(R.id.tv_prompt)
-        etInput = findViewById(R.id.et_input)
-        etCarInfo = findViewById(R.id.et_car_info)
+        etUserInput = findViewById(R.id.et_user_input)
         btnSend = findViewById(R.id.btn_send)
         btnClose = findViewById(R.id.btn_close)
         scrollOutput = findViewById(R.id.scroll_output)
@@ -119,6 +118,13 @@ class MainActivity : AppCompatActivity() {
         btnClose.setOnClickListener {
             appendStatus("\nГотов")
             btnClose.visibility = android.view.View.GONE
+            btnSend.visibility = android.view.View.GONE
+            // Вернуть кнопки
+            findViewById<LinearLayout>(R.id.top_buttons).visibility = android.view.View.VISIBLE
+            findViewById<LinearLayout>(R.id.check_section).visibility = android.view.View.VISIBLE
+            btnHistory.visibility = android.view.View.VISIBLE
+            cbFullMode.visibility = android.view.View.VISIBLE
+            tvDtcStatus.visibility = android.view.View.VISIBLE
         }
 
         // Версия из build.gradle (versionName)
@@ -191,7 +197,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun startScript() {
         val mode = if (cbFullMode.isChecked) "full" else "test"
-        val carInfo = etCarInfo.text.toString().trim()
+        val carInfo = etUserInput.text.toString().trim()
         val intent = Intent(this, ScriptRunnerService::class.java).apply {
             action = ScriptRunnerService.ACTION_RUN
             putExtra(ScriptRunnerService.EXTRA_SCRIPT_URL, "https://obdai.ru/api/v1/script?mode=$mode")
@@ -200,7 +206,6 @@ class MainActivity : AppCompatActivity() {
         ContextCompat.startForegroundService(this, intent)
 
         tvStatus.text = ""
-        tvPrompt.visibility = android.view.View.GONE
         tvStatus.text = "⏳ Инициализация ELM327..."
         scriptStartTime = System.currentTimeMillis()
         registerScriptReceiver()
@@ -312,27 +317,21 @@ class MainActivity : AppCompatActivity() {
         return dev
     }
 
-    /** Запускает тикающий таймер на отдельной строке. Возвращает флаг для остановки. */
+    /** Запускает тикающий таймер в tv_version. Возвращает флаг для остановки. */
     private fun startTimer(): java.util.concurrent.atomic.AtomicBoolean {
         val running = java.util.concurrent.atomic.AtomicBoolean(true)
-        appendStatus("\n⏳")  // своя строка, чтобы не съесть заголовок
+        val tvVer = findViewById<TextView>(R.id.tv_version)
+        val origText = tvVer.text.toString()
         thread(name = "Timer", isDaemon = true) {
             var sec = 0
             while (running.get()) {
                 Thread.sleep(1000)
                 sec++
                 runOnUiThread {
-                    if (running.get()) {
-                        // Обновляем только последнюю строку (таймерную)
-                        val current = tvStatus.text.toString()
-                        val lastNewline = current.lastIndexOf('\n')
-                        if (lastNewline >= 0) {
-                            val before = current.substring(0, lastNewline + 1)
-                            tvStatus.text = "$before⏳ ${sec}с"
-                        }
-                    }
+                    if (running.get()) tvVer.text = "⏱ ${sec}с"
                 }
             }
+            runOnUiThread { tvVer.text = origText }
         }
         return running
     }
@@ -364,6 +363,13 @@ class MainActivity : AppCompatActivity() {
                 "done" -> {
                     appendStatus("\n$detail$elapsed")
                     btnClose.visibility = android.view.View.VISIBLE
+                    btnSend.visibility = android.view.View.VISIBLE
+                    // Скрыть верхние элементы для максимизации вывода
+                    findViewById<LinearLayout>(R.id.top_buttons).visibility = android.view.View.GONE
+                    findViewById<LinearLayout>(R.id.check_section).visibility = android.view.View.GONE
+                    btnHistory.visibility = android.view.View.GONE
+                    findViewById<CheckBox>(R.id.cb_full_mode).visibility = android.view.View.GONE
+                    findViewById<TextView>(R.id.tv_dtc_status).visibility = android.view.View.GONE
                 }
                 else -> appendStatus("\n📡 $detail$elapsed")
             }
@@ -394,9 +400,9 @@ class MainActivity : AppCompatActivity() {
     // ── Чат с LLM ────────────────────────────────────────
 
     private fun sendToLlm() {
-        val text = etInput.text.toString().trim()
+        val text = etUserInput.text.toString().trim()
         if (text.isEmpty()) return
-        etInput.text.clear()
+        etUserInput.text.clear()
         chatHistory.add("user" to text)
         appendStatus("\n👤 $text")
         thread(name = "LlmChat", isDaemon = true) {

@@ -219,7 +219,7 @@ class ElmChecker(
                 Thread.sleep(500)
                 elm = ElmProtocol(s.inputStream, s.outputStream)
             } catch (e2: Exception) {
-                throw IOException("BT fallback: ${e2.message}", e2)
+                throw IOException("не удалось подключиться к ELM327", e2)
             }
         }
     }
