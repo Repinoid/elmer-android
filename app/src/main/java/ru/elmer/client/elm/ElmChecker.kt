@@ -122,6 +122,15 @@ class ElmChecker(
         return codes.distinct()
     }
 
+    /** Подключиться к ELM327. Вызвать перед DynamicCollector. */
+    fun connect(): Boolean = connectAndInit()
+
+    /** Проверить, подключен ли ELM. */
+    fun isConnected(): Boolean = socket?.isConnected == true && elm != null
+
+    /** Получить ElmProtocol для прямых команд. */
+    fun getElm(): ElmProtocol? = elm
+
     private fun parseDtcCodes(raw: String): List<String> {
         val clean = raw.replace(Regex("\\s+"), "").uppercase()
         if (!clean.startsWith("43") && !clean.startsWith("47")) return emptyList()

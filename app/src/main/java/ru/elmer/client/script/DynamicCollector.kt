@@ -72,4 +72,6 @@ class DynamicCollector(
         try { threadRef?.join(3000) } catch (_: Exception) {}
         return synchronized(samples) { samples.toList() }
     }
+
+    fun isRunning(): Boolean = running.get()
 }

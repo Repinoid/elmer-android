@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.content.*
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
@@ -43,6 +44,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etUserInput: EditText
     private lateinit var btnSend: Button
     private lateinit var btnClose: Button
+    private lateinit var btnDynIdle: Button
+    private lateinit var btnDynDrive: Button
+    private lateinit var dynamicButtons: LinearLayout
     private lateinit var scrollOutput: ScrollView
 
     private val btAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
@@ -112,6 +116,9 @@ class MainActivity : AppCompatActivity() {
         etUserInput = findViewById(R.id.et_user_input)
         btnSend = findViewById(R.id.btn_send)
         btnClose = findViewById(R.id.btn_close)
+        btnDynIdle = findViewById(R.id.btn_dyn_idle)
+        btnDynDrive = findViewById(R.id.btn_dyn_drive)
+        dynamicButtons = findViewById(R.id.dynamic_buttons)
         scrollOutput = findViewById(R.id.scroll_output)
 
         btnSend.setOnClickListener { sendToLlm() }
@@ -126,6 +133,9 @@ class MainActivity : AppCompatActivity() {
             cbFullMode.visibility = android.view.View.VISIBLE
             tvDtcStatus.visibility = android.view.View.VISIBLE
         }
+
+        btnDynIdle.setOnClickListener { startDynamicTest("idle") }
+        btnDynDrive.setOnClickListener { startDynamicTest("drive") }
 
         // Версия из build.gradle (versionName)
         val version = packageManager.getPackageInfo(packageName, 0).versionName
@@ -367,6 +377,7 @@ class MainActivity : AppCompatActivity() {
                     appendStatus("\n$detail$elapsed")
                     btnClose.visibility = android.view.View.VISIBLE
                     btnSend.visibility = android.view.View.VISIBLE
+                    dynamicButtons.visibility = android.view.View.VISIBLE
                     // Скрыть верхние элементы для максимизации вывода
                     findViewById<LinearLayout>(R.id.top_buttons).visibility = android.view.View.GONE
                     findViewById<LinearLayout>(R.id.check_section).visibility = android.view.View.GONE
@@ -439,6 +450,144 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread { appendStatus("\n❌ ${e.message}") }
             }
         }
+    }
+
+    // ── Динамический тест ────────────────────────────────
+
+    private var dynamicCollector: ru.elmer.client.script.DynamicCollector? = null
+
+    private fun startDynamicTest(mode: String) {
+        val dev = elmDevice ?: findElmDevice() ?: return
+        val isDrive = mode == "drive"
+        val label = if (isDrive) "🚗 В движении" else "⏱ На месте"
+
+        // Подсказка
+        if (isDrive) {
+            appendStatus("\n\n🚗 ТЕСТ В ДВИЖЕНИИ")
+            appendStatus("\n⚠️ Остановитесь. Нажмите СТАРТ ДО начала движения.")
+            appendStatus("\n⚠️ Ничего не нажимайте в движении — программа пишет сама.")
+            appendStatus("\n⚠️ Включите 2-ю передачу, ~3000 об/мин, затем сбросьте газ.")
+            appendStatus("\n⚠️ После полной остановки нажмите СТОП.")
+        } else {
+            appendStatus("\n\n⏱ ТЕСТ НА МЕСТЕ")
+            appendStatus("\n⚠️ Нажмите СТАРТ, затем нажмите педаль газа.")
+            appendStatus("\n⚠️ Поднимите до ~3000 об/мин, держите 3-4 сек, резко сбросьте.")
+            appendStatus("\n⚠️ Нажмите СТОП после завершения.")
+        }
+
+        // Превращаем кнопки в СТАРТ
+        dynamicButtons.visibility = android.view.View.GONE
+        btnScript.text = "▶ СТАРТ $label"
+        btnScript.isEnabled = true
+        btnScript.visibility = android.view.View.VISIBLE
+        findViewById<LinearLayout>(R.id.top_buttons).visibility = android.view.View.VISIBLE
+
+        // Флаг чтобы отличить повторное нажатие
+        var started = false
+
+        btnScript.setOnClickListener {
+            if (!started) {
+                // СТАРТ
+                started = true
+                btnScript.text = "⏹ СТОП $label"
+                btnScript.setBackgroundColor(0xFFd32f2f.toInt())
+                appendStatus("\n▶ Запись началась...")
+
+                thread(name = "DynamicTest", isDaemon = true) {
+                    try {
+                        // Скачиваем скрипт dynamic
+                        val client = ru.elmer.client.server.ServerClient(
+                            "https://obdai.ru",
+                            "https://obdai.ru/api/v1/script?mode=dynamic",
+                            ""
+                        )
+                        val scriptJson = client.downloadScript()
+                        val script = org.json.JSONObject(scriptJson)
+                        val stepsArr = script.getJSONArray("steps")
+                        val interval = script.optLong("interval_ms", 250)
+                        val steps = (0 until stepsArr.length()).map {
+                            val s = stepsArr.getJSONObject(it)
+                            ru.elmer.client.script.DynamicCollector.ElmStep(
+                                s.getString("id"), s.getString("cmd"), s.getString("desc")
+                            )
+                        }
+
+                        // Подключаемся к ELM если ещё нет
+                        val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
+                        if (!checker.isConnected()) {
+                            ui { appendStatus("\n⏳ Подключение к ELM...") }
+                            checker.connect()
+                        }
+                        val elmProto = checker.getElm()
+                            ?: run { ui { appendStatus("\n❌ Нет связи с ELM") }; return@thread }
+
+                        val timer = startTimer()
+                        val collector = ru.elmer.client.script.DynamicCollector(
+                            elm = elmProto,
+                            steps = steps,
+                            intervalMs = interval,
+                            onSample = { idx -> ui { appendStatus("\r📊 ${idx + 1} отсчётов") } },
+                            onLog = { }  // не спамим
+                        )
+                        dynamicCollector = collector
+                        collector.start()
+
+                        // Ждём СТОП
+                        while (started && collector.isRunning()) {
+                            Thread.sleep(200)
+                        }
+                        val samples = collector.stop()
+                        timer.set(false)
+
+                        val totalCount = samples.sumOf { it.size }
+                        ui { appendStatus("\n📊 Записано: ${samples.size} отсчётов ($totalCount ответов)") }
+
+                        // Сохраняем в БД и отправляем
+                        ui { appendStatus("\n📤 Отправка на сервер...") }
+                        val db = SessionDb(this@MainActivity)
+                        val sid = db.createSession(scriptJson, "Динамический тест", "https://obdai.ru")
+                        samples.forEachIndexed { i, batch ->
+                            batch.forEach { r ->
+                                db.addResponse(sid, "sample_$i", r.cmd, r.raw, r.decoded)
+                            }
+                        }
+                        val allResponses = db.getResponses(sid)
+                        val clientInfo = buildSimpleClientInfo()
+                        val uploadResp = client.uploadSession(sid, allResponses, clientInfo, "")
+                        if (uploadResp != null) {
+                            db.markUploaded(sid)
+                            val d = uploadResp.optString("diagnosis", "")
+                            if (d.isNotEmpty()) {
+                                ui {
+                                    appendStatus("\n🩺 Диагноз:")
+                                    d.chunked(60).forEach { appendStatus(it.trim()) }
+                                }
+                            }
+                        } else {
+                            ui { appendStatus("\n⚠️ Сервер недоступен. Данные сохранены локально.") }
+                        }
+                    } catch (e: Exception) {
+                        ui { appendStatus("\n❌ ${e.message}") }
+                    }
+                }
+            } else {
+                // СТОП
+                started = false
+                appendStatus("\n⏹ Запись остановлена")
+                btnScript.visibility = android.view.View.GONE
+                dynamicButtons.visibility = android.view.View.VISIBLE
+            }
+        }
+    }
+
+    private fun buildSimpleClientInfo(): Map<String, String> {
+        val info = mutableMapOf<String, String>()
+        info["phone_model"] = android.os.Build.MODEL
+        info["phone_maker"] = android.os.Build.MANUFACTURER
+        info["android_version"] = android.os.Build.VERSION.RELEASE
+        info["script_mode"] = "dynamic"
+        try { info["app_version"] = packageManager.getPackageInfo(packageName, 0).versionName } catch (_: Exception) {}
+        return info
     }
 
     private fun showHistory() {
