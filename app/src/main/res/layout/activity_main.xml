@@ -5,31 +5,22 @@
     android:gravity="center_horizontal" android:background="#1a1a2e">
 
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="2dp">
-        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:text="elmAI" android:textSize="22sp"
-            android:textColor="#ff6b35" android:layout_marginTop="8dp" />
-        <TextView android:id="@+id/ind_server" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="📡 🔴" android:textSize="11sp" android:gravity="center"
-            android:textColor="#cccccc" android:padding="2dp" android:clickable="true" android:focusable="true" />
-        <TextView android:id="@+id/ind_elm" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="ELM 🔴" android:textSize="11sp" android:gravity="center"
-            android:textColor="#cccccc" android:padding="2dp" android:clickable="true" android:focusable="true" />
-    </LinearLayout>
-
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="6dp">
-        <TextView android:id="@+id/tv_version" android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:text="v?" android:textSize="11sp" android:textColor="#ff6b35" android:textStyle="bold" />
+        <TextView android:id="@+id/tv_title" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="elmAI" android:textSize="20sp" android:textColor="#ff6b35" android:layout_marginEnd="4dp" />
+        <TextView android:id="@+id/tv_version" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="v?" android:textSize="11sp" android:textColor="#ff6b35" android:textStyle="bold" android:layout_marginEnd="8dp" />
+        <TextView android:id="@+id/ind_server" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="📡 🔴" android:textSize="11sp" android:textColor="#cccccc" android:padding="1dp" android:layout_marginEnd="4dp" android:clickable="true" android:focusable="true" />
+        <TextView android:id="@+id/ind_elm" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="ELM 🔴" android:textSize="11sp" android:textColor="#cccccc" android:padding="1dp" android:layout_marginEnd="4dp" android:clickable="true" android:focusable="true" />
         <TextView android:id="@+id/ind_ecu" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="ECU 🔴" android:textSize="11sp" android:gravity="center"
-            android:textColor="#cccccc" android:padding="2dp" android:clickable="true" android:focusable="true" />
+            android:text="ECU 🔴" android:textSize="11sp" android:textColor="#cccccc" android:padding="1dp" android:layout_marginEnd="4dp" android:clickable="true" android:focusable="true" />
         <TextView android:id="@+id/ind_llm" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="LLM 🔴" android:textSize="11sp" android:gravity="center"
-            android:textColor="#cccccc" android:padding="2dp" android:clickable="true" android:focusable="true" />
+            android:text="LLM 🔴" android:textSize="11sp" android:textColor="#cccccc" android:padding="1dp" android:clickable="true" android:focusable="true" />
         <TextView android:id="@+id/tv_timer" android:layout_width="wrap_content" android:layout_height="wrap_content"
             android:text="" android:textSize="11sp" android:textColor="#ff6b35"
-            android:fontFamily="monospace" android:visibility="gone" android:layout_marginStart="6dp" />
+            android:fontFamily="monospace" android:visibility="gone" android:layout_marginStart="4dp" />
     </LinearLayout>
 
     <Button android:id="@+id/btn_action" android:layout_width="match_parent" android:layout_height="wrap_content"
