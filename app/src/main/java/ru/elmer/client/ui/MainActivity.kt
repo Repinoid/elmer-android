@@ -31,10 +31,11 @@ import ru.elmer.client.script.ScriptRunnerService
  */
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var btnScript: Button
     private lateinit var btnDtc: Button
+    private lateinit var btnScript: Button
     private lateinit var tvDtcStatus: TextView
     private lateinit var btnHistory: Button
+    private lateinit var btnTest: Button
     private lateinit var btnCheckElm: Button
     private lateinit var btnCheckEcu: Button
     private var elmChecker: ru.elmer.client.elm.ElmChecker? = null
@@ -121,6 +122,9 @@ class MainActivity : AppCompatActivity() {
         btnDynDrive = findViewById(R.id.btn_dyn_drive)
         scrollOutput = findViewById(R.id.scroll_output)
 
+        btnTest = findViewById(R.id.btn_test)
+        btnTest.setOnClickListener { startTest() }
+
         btnSend.setOnClickListener { sendToLlm() }
         btnClose.setOnClickListener {
             appendStatus("\nГотов")
@@ -147,10 +151,6 @@ class MainActivity : AppCompatActivity() {
         val version = packageManager.getPackageInfo(packageName, 0).versionName
         val tvVersion = findViewById<TextView>(R.id.tv_version)
         tvVersion.text = "v$version"
-
-        // ТЕСТОВАЯ КНОПКА
-        val btnTest = findViewById<Button>(R.id.btn_test)
-        btnTest.setOnClickListener { startTest() }
 
         // СКРИПТ
         btnScript.setOnClickListener { startScript() }
@@ -419,13 +419,17 @@ class MainActivity : AppCompatActivity() {
                     appendStatus("\n$detail$elapsed")
                     btnClose.visibility = android.view.View.VISIBLE
                     btnSend.visibility = android.view.View.VISIBLE
-                    dynamicButtons.visibility = android.view.View.VISIBLE
-                    // Скрыть верхние элементы для максимизации вывода
-                    findViewById<LinearLayout>(R.id.top_buttons).visibility = android.view.View.GONE
-                    findViewById<LinearLayout>(R.id.check_section).visibility = android.view.View.GONE
+                    btnDynIdle.visibility = android.view.View.VISIBLE
+                    btnDynDrive.visibility = android.view.View.VISIBLE
+                    // Скрыть верхние кнопки для максимизации вывода
+                    btnDtc.visibility = android.view.View.GONE
+                    btnScript.visibility = android.view.View.GONE
+                    btnTest.visibility = android.view.View.GONE
+                    btnCheckElm.visibility = android.view.View.GONE
+                    btnCheckEcu.visibility = android.view.View.GONE
                     btnHistory.visibility = android.view.View.GONE
-                    findViewById<CheckBox>(R.id.cb_full_mode).visibility = android.view.View.GONE
-                    findViewById<TextView>(R.id.tv_dtc_status).visibility = android.view.View.GONE
+                    cbFullMode.visibility = android.view.View.GONE
+                    tvDtcStatus.visibility = android.view.View.GONE
                 }
                 else -> appendStatus("\n📡 $detail$elapsed")
             }
@@ -522,8 +526,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Показываем кнопку СТАРТ
-        dynamicButtons.visibility = android.view.View.GONE
-        findViewById<LinearLayout>(R.id.top_buttons).visibility = android.view.View.VISIBLE
+        btnDynIdle.visibility = android.view.View.GONE
+        btnDynDrive.visibility = android.view.View.GONE
         btnDynStart.text = "▶ СТАРТ $label"
         btnDynStart.setBackgroundColor(0xFF4CAF50.toInt())
         btnDynStart.visibility = android.view.View.VISIBLE
@@ -601,7 +605,8 @@ class MainActivity : AppCompatActivity() {
                 started = false
                 appendStatus("\n⏹ Запись завершена")
                 btnDynStart.visibility = android.view.View.GONE
-                dynamicButtons.visibility = android.view.View.VISIBLE
+                btnDynIdle.visibility = android.view.View.VISIBLE
+                btnDynDrive.visibility = android.view.View.VISIBLE
             }
         }
     }
