@@ -99,8 +99,10 @@ class MainActivity : AppCompatActivity() {
 
     // ── Светофоры ────────────────────────────────────────
 
-    private fun setIndicator(tv: TextView, icon: String, color: String) {
-        tv.text = "$icon $color"
+    private fun setIndicator(tv: TextView, label: String, color: String) {
+        tv.text = "$label $color"
+        val c = when (color) { "🟢" -> 0xFF4CAF50.toInt(); "🟡" -> 0xFFFFC107.toInt(); else -> 0xFFF44336.toInt() }
+        tv.setTextColor(c)
     }
 
     private fun startChecks() {
@@ -128,47 +130,47 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkElm() {
-        setIndicator(indElm, "🔌", "🟡")
+        setIndicator(indElm, "ELM", "🟡")
         val dev = findElmDevice()
-        if (dev == null) { setIndicator(indElm, "🔌", "🔴"); return }
+        if (dev == null) { setIndicator(indElm, "ELM", "🔴"); return }
         elmDevice = dev
         try {
             val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
             val r = checker.checkDevice()
             if (r != null) {
                 elmChecker = checker
-                setIndicator(indElm, "🔌", "🟢")
+                setIndicator(indElm, "ELM", "🟢")
                 checkEcu()
             } else {
-                setIndicator(indElm, "🔌", "🔴")
+                setIndicator(indElm, "ELM", "🔴")
             }
         } catch (e: Exception) {
-            setIndicator(indElm, "🔌", "🔴")
+            setIndicator(indElm, "ELM", "🔴")
         }
     }
 
     private fun checkEcu() {
         val checker = elmChecker ?: return
-        setIndicator(indEcu, "🚗", "🟡")
+        setIndicator(indEcu, "ECU", "🟡")
         try {
             val r = checker.checkEcu()
-            setIndicator(indEcu, "🚗", if (r.supportsObd) "🟢" else "🔴")
+            setIndicator(indEcu, "ECU", if (r.supportsObd) "🟢" else "🔴")
         } catch (e: Exception) {
-            setIndicator(indEcu, "🚗", "🔴")
+            setIndicator(indEcu, "ECU", "🔴")
         }
     }
 
     private fun checkLlm() {
-        setIndicator(indLlm, "🧠", "🟡")
+        setIndicator(indLlm, "LLM", "🟡")
         try {
             val url = java.net.URL("https://obdai.ru/api/v1/ping-llm")
             val conn = url.openConnection() as java.net.HttpURLConnection
             conn.connectTimeout = 5000; conn.readTimeout = 5000
             val ok = conn.responseCode == 200
             conn.disconnect()
-            setIndicator(indLlm, "🧠", if (ok) "🟢" else "🔴")
+            setIndicator(indLlm, "LLM", if (ok) "🟢" else "🔴")
         } catch (e: Exception) {
-            setIndicator(indLlm, "🧠", "🔴")
+            setIndicator(indLlm, "LLM", "🔴")
         }
     }
 

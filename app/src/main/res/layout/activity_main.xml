@@ -4,33 +4,32 @@
     android:orientation="vertical" android:padding="12dp"
     android:gravity="center_horizontal" android:background="#1a1a2e">
 
-    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:text="🔧 elmAI" android:textSize="22sp" android:textColor="#ff6b35"
-        android:layout_marginTop="8dp" android:layout_marginBottom="2dp" />
-
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal" android:gravity="center" android:layout_marginBottom="6dp">
-        <TextView android:id="@+id/tv_version" android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:text="v?" android:textSize="10sp" android:textColor="#555" />
-        <TextView android:id="@+id/tv_timer" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="" android:textSize="12sp" android:textColor="#ff6b35"
-            android:fontFamily="monospace" android:visibility="gone" />
+        android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="2dp">
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="elmAI" android:textSize="22sp"
+            android:textColor="#ff6b35" android:layout_marginTop="8dp" />
+        <TextView android:id="@+id/ind_server" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="📡 🔴" android:textSize="11sp" android:gravity="center"
+            android:textColor="#cccccc" android:padding="2dp" android:clickable="true" android:focusable="true" />
+        <TextView android:id="@+id/ind_elm" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="ELM 🔴" android:textSize="11sp" android:gravity="center"
+            android:textColor="#cccccc" android:padding="2dp" android:clickable="true" android:focusable="true" />
     </LinearLayout>
 
-    <LinearLayout android:id="@+id/indicators" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal" android:gravity="center" android:layout_marginBottom="6dp">
-        <TextView android:id="@+id/ind_server" android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:text="📡 🔴" android:textSize="11sp" android:gravity="center"
-            android:textColor="#aaaaaa" android:padding="4dp" android:clickable="true" android:focusable="true" />
-        <TextView android:id="@+id/ind_elm" android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:text="🔌 🔴" android:textSize="11sp" android:gravity="center"
-            android:textColor="#aaaaaa" android:padding="4dp" android:clickable="true" android:focusable="true" />
-        <TextView android:id="@+id/ind_ecu" android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:text="🚗 🔴" android:textSize="11sp" android:gravity="center"
-            android:textColor="#aaaaaa" android:padding="4dp" android:clickable="true" android:focusable="true" />
-        <TextView android:id="@+id/ind_llm" android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:text="🧠 🔴" android:textSize="11sp" android:gravity="center"
-            android:textColor="#aaaaaa" android:padding="4dp" android:clickable="true" android:focusable="true" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="6dp">
+        <TextView android:id="@+id/tv_version" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="v?" android:textSize="11sp" android:textColor="#ff6b35" android:textStyle="bold" />
+        <TextView android:id="@+id/ind_ecu" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="ECU 🔴" android:textSize="11sp" android:gravity="center"
+            android:textColor="#cccccc" android:padding="2dp" android:clickable="true" android:focusable="true" />
+        <TextView android:id="@+id/ind_llm" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="LLM 🔴" android:textSize="11sp" android:gravity="center"
+            android:textColor="#cccccc" android:padding="2dp" android:clickable="true" android:focusable="true" />
+        <TextView android:id="@+id/tv_timer" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="" android:textSize="11sp" android:textColor="#ff6b35"
+            android:fontFamily="monospace" android:visibility="gone" android:layout_marginStart="6dp" />
     </LinearLayout>
 
     <Button android:id="@+id/btn_action" android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -51,10 +50,11 @@
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="horizontal" android:layout_marginTop="4dp">
         <EditText android:id="@+id/et_user_input" android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:hint="Что беспокоит? Чем подробнее — тем лучше"
+            android:layout_weight="1" android:hint="Укажите марку, модель авто и что беспокоит"
             android:textColor="#e0e0e0" android:textColorHint="#555555" android:textSize="12sp"
             android:padding="8dp" android:background="@drawable/edit_bg"
-            android:inputType="text|textMultiLine" android:minLines="2" android:maxLines="2" android:gravity="top" />
+            android:inputType="text|textMultiLine" android:minLines="3" android:maxLines="3" android:gravity="top"
+            android:scrollbars="vertical" />
         <Button android:id="@+id/btn_send" android:layout_width="48dp" android:layout_height="48dp"
             android:text="➤" android:textSize="18sp" android:textColor="#ffffff"
             android:backgroundTint="#ff6b35" android:padding="0dp" android:layout_marginStart="4dp" />
