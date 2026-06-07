@@ -226,6 +226,40 @@
         android:visibility="gone"
         android:layout_marginTop="4dp" />
 
+    <!-- Динамические тесты (после диагноза) -->
+    <LinearLayout
+        android:id="@+id/dynamic_buttons"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:visibility="gone"
+        android:layout_marginTop="4dp">
+
+        <Button
+            android:id="@+id/btn_dyn_idle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="⏱ На месте"
+            android:textSize="12sp"
+            android:textColor="#ffffff"
+            android:backgroundTint="#4CAF50"
+            android:padding="8dp"
+            android:layout_marginEnd="4dp" />
+
+        <Button
+            android:id="@+id/btn_dyn_drive"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="🚗 В движении"
+            android:textSize="12sp"
+            android:textColor="#ffffff"
+            android:backgroundTint="#2196F3"
+            android:padding="8dp" />
+
+    </LinearLayout>
+
     <!-- Поле ввода: всегда видно, 2 строки, не перекрывается -->
     <LinearLayout
         android:layout_width="match_parent"
