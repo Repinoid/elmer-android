@@ -201,8 +201,8 @@ class MainActivity : AppCompatActivity() {
             State.INIT -> scanDtc()
             State.DTC  -> runDiagnostics()
             State.DIAG -> startDynamicRecording()
-            State.START -> { }
-            State.STOP  -> stopDynamicRecording()
+            State.START -> stopDynamicRecording()
+            State.STOP  -> { /* уже остановлен */ }
         }
     }
 
@@ -230,8 +230,10 @@ class MainActivity : AppCompatActivity() {
                     appendStatus("\n❌ ELM не отвечает")
                 } else if (r.isEmpty()) {
                     appendStatus("\n✅ Ошибок нет")
+                    setIndicator(indEcu, "ECU", "🟢")
                 } else {
                     appendStatus("\n⚠️ Ошибки: ${r.joinToString(", ")}")
+                    setIndicator(indEcu, "ECU", "🟢")
                 }
                 setActionState(State.DTC)
             }
