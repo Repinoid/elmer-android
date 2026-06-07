@@ -30,7 +30,7 @@ object ObdDecoder {
         if (raw.startsWith("RX ERROR")) return "ошибка приёма"
         if (raw == "(no elm)" || raw == "(err)") return raw
 
-        val clean = raw.replace(":", "").replace(" ", "").uppercase()
+        val clean = raw.replace("\r", "").replace("\n", "").replace(":", "").replace(" ", "").uppercase()
 
         // VIN
         if (cmd == "0902" && "490201" in clean) {
