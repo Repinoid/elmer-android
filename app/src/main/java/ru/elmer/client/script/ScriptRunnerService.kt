@@ -151,8 +151,13 @@ class ScriptRunnerService : Service() {
             errorDone("Нет спаренных устройств")
             return
         }
-        // Берём первое спаренное устройство
-        val dev = bonded[0]
+        val targetMac = intent.getStringExtra("elm_mac")
+        val dev = if (targetMac != null) bonded.find { it.address == targetMac } else bonded[0]
+        if (dev == null) {
+            log("❌ Устройство с MAC $targetMac не найдено")
+            errorDone("ELM не найден")
+            return
+        }
         elmMac = dev.address; elmBtName = dev.name
         log("   Найден: ${dev.name} (${dev.address})"); log("⏳ Подключение...")
         try {

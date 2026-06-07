@@ -254,6 +254,7 @@ private fun checkEcu() {
             action = ScriptRunnerService.ACTION_RUN
             putExtra(ScriptRunnerService.EXTRA_SCRIPT_URL, "https://obdai.ru/api/v1/script?mode=$mode")
             if (carInfo.isNotEmpty()) putExtra(ScriptRunnerService.EXTRA_CAR_INFO, carInfo)
+            elmDevice?.address?.let { putExtra("elm_mac", it) }
             dynamicSamples?.let { samples ->
                 if (samples.isNotEmpty()) {
                     val jsonArr = org.json.JSONArray()
@@ -411,8 +412,14 @@ private fun checkEcu() {
             .setTitle("📋 История (${recent.size})")
             .setItems(items) { _, which ->
                 val d = diagnoses[which]; val title = items[which]
+                val scrollView = android.widget.ScrollView(this@MainActivity)
+                val tv = android.widget.TextView(this@MainActivity).apply {
+                    text = d; textSize = 13f; setTextColor(0xFFe0e0e0.toInt())
+                    setPadding(24, 16, 24, 16)
+                }
+                scrollView.addView(tv)
                 androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
-                    .setTitle(title).setMessage(if (d.length > 500) d.take(500) + "…" else d)
+                    .setTitle(title).setView(scrollView)
                     .setPositiveButton("📤 Поделиться") { _, _ ->
                         val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                             type = "text/plain"; putExtra(android.content.Intent.EXTRA_SUBJECT, "elmAI: $title")
