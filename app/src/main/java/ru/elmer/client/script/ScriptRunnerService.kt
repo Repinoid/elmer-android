@@ -118,6 +118,7 @@ class ScriptRunnerService : Service() {
         serverUrl = intent.getStringExtra(EXTRA_SERVER_URL) ?: "https://obdai.ru"
         carInfo = intent.getStringExtra(EXTRA_CAR_INFO) ?: ""
         dynamicSamplesJson = intent.getStringExtra(EXTRA_DYNAMIC_SAMPLES)
+        elmMac = intent.getStringExtra("elm_mac") ?: ""
 
         scriptMode = if (scriptUrl.contains("full")) "full" else "test"
         startTime = System.currentTimeMillis()
@@ -151,7 +152,7 @@ class ScriptRunnerService : Service() {
             errorDone("Нет спаренных устройств")
             return
         }
-        val targetMac = intent.getStringExtra("elm_mac")
+        val targetMac = elmMac
         val dev = if (targetMac != null) bonded.find { it.address == targetMac } else bonded[0]
         if (dev == null) {
             log("❌ Устройство с MAC $targetMac не найдено")
