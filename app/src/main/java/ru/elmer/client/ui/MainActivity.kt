@@ -248,36 +248,65 @@ private fun checkEcu() {
             setActionState(State.DIAG)
             return
         }
+        val checker = elmChecker
+        if (checker == null) { appendStatus("\n❌ Нет связи с ELM"); return }
+        val elmProto = checker.getElm()
+        if (elmProto == null) { appendStatus("\n❌ ELM не инициализирован"); return }
+
         val carInfo = etUserInput.text.toString().trim()
-        val mode = "test"
-        val intent = Intent(this, ScriptRunnerService::class.java).apply {
-            action = ScriptRunnerService.ACTION_RUN
-            putExtra(ScriptRunnerService.EXTRA_SCRIPT_URL, "https://obdai.ru/api/v1/script?mode=$mode")
-            if (carInfo.isNotEmpty()) putExtra(ScriptRunnerService.EXTRA_CAR_INFO, carInfo)
-            elmDevice?.address?.let { putExtra("elm_mac", it) }
-            dynamicSamples?.let { samples ->
-                if (samples.isNotEmpty()) {
-                    val jsonArr = org.json.JSONArray()
-                    for (sample in samples) {
-                        val batch = org.json.JSONArray()
-                        for (r in sample) batch.put(org.json.JSONObject().apply {
-                            put("step_id", r.stepId); put("cmd", r.cmd); put("raw", r.raw); put("decoded", r.decoded)
-                        })
-                        jsonArr.put(batch)
-                    }
-                    putExtra(ScriptRunnerService.EXTRA_DYNAMIC_SAMPLES, jsonArr.toString())
+        val timer = startTimer()
+
+        thread(name = "Diagnostics", isDaemon = true) {
+            try {
+                val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
+                val scriptJson = client.downloadScript()
+                val script = org.json.JSONObject(scriptJson)
+                val stepsArr = script.getJSONArray("steps")
+                val total = stepsArr.length()
+                ui { appendStatus("\n📋 $total шагов") }
+
+                val results = mutableListOf<Map<String, String?>>()
+                for (i in 0 until total) {
+                    val s = stepsArr.getJSONObject(i)
+                    val cmd = s.optString("cmd", ""); if (cmd.isEmpty()) continue
+                    val desc = s.optString("desc", "")
+                    ui { updateLastLine("📡 $desc ($cmd)") }
+
+                    val raw = try { elmProto.sendCommand(cmd) } catch (e: Exception) { "(err)" }
+                    val decoded = ru.elmer.client.elm.ObdDecoder.decode(cmd, raw)
+                    results.add(mapOf("step_id" to s.optString("id", ""), "cmd" to cmd, "raw" to raw, "decoded" to decoded))
                 }
+
+                val count = results.size
+                val db = SessionDb(this@MainActivity)
+                val sid = db.createSession(scriptJson, "Диагностика", "https://obdai.ru")
+                results.forEach { r -> db.addResponse(sid, r["step_id"] ?: "", r["cmd"] ?: "", r["raw"] ?: "", r["decoded"] ?: "") }
+
+                // Динамические сэмплы, если есть
+                val dynForUpload = dynamicSamples?.map { batch -> batch.map { r -> mapOf("step_id" to r.stepId, "cmd" to r.cmd, "raw" to r.raw, "decoded" to r.decoded) } }
+                dynamicSamples = null
+
+                ui { updateLastLine("📤 Отправка $count ответов...") }
+                val clientInfo = mapOf("phone_model" to Build.MODEL, "app_version" to (packageManager.getPackageInfo(packageName, 0).versionName ?: "?"))
+                val resp = client.uploadSession(sid, results, clientInfo, carInfo, dynForUpload)
+                timer.set(false)
+
+                if (resp != null) {
+                    db.markUploaded(sid)
+                    val d = resp.optString("diagnosis", "")
+                    if (d.isNotEmpty()) {
+                        db.saveDiagnosis(sid, d)
+                        ui { appendStatus("\n\n🩺 ДИАГНОЗ\n$d") }
+                    }
+                } else {
+                    ui { appendStatus("\n⚠️ Сервер недоступен. Данные сохранены.") }
+                }
+            } catch (e: Exception) {
+                timer.set(false)
+                ui { appendStatus("\n❌ ${e.message}") }
             }
+            ui { setActionState(State.DIAG) }
         }
-        ContextCompat.startForegroundService(this, intent)
-        // Освобождаем BT — сервис подключится сам
-        elmChecker?.close()
-        elmChecker = null
-        tvStatus.text = ""
-        appendStatus("⏳ Диагностика...")
-        dynamicSamples = null
-        registerScriptReceiver()
-        setActionState(State.DIAG)
     }
 
     private fun startDynamicRecording() {
