@@ -100,9 +100,11 @@ class MainActivity : AppCompatActivity() {
     // ── Светофоры ────────────────────────────────────────
 
     private fun setIndicator(tv: TextView, label: String, color: String) {
-        tv.text = "$label $color"
         val c = when (color) { "🟢" -> 0xFF4CAF50.toInt(); "🟡" -> 0xFFFFC107.toInt(); else -> 0xFFF44336.toInt() }
-        tv.setTextColor(c)
+        runOnUiThread {
+            tv.text = "$label $color"
+            tv.setTextColor(c)
+        }
     }
 
     private fun startChecks() {
