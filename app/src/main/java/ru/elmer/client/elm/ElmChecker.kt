@@ -123,7 +123,7 @@ class ElmChecker(
     }
 
     /** Подключиться к ELM327. Вызвать перед DynamicCollector. */
-    fun connect(): Boolean = connectAndInit()
+    fun ensureConnected(): Boolean = connectAndInit()
 
     /** Проверить, подключен ли ELM. */
     fun isConnected(): Boolean = socket?.isConnected == true && elm != null

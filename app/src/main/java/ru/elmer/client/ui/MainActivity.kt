@@ -518,7 +518,7 @@ class MainActivity : AppCompatActivity() {
                         val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
                         if (!checker.isConnected()) {
                             ui { appendStatus("\n⏳ Подключение к ELM...") }
-                            checker.connect()
+                            checker.ensureConnected()
                         }
                         val elmProto = checker.getElm()
                             ?: run { ui { appendStatus("\n❌ Нет связи с ELM") }; return@thread }
