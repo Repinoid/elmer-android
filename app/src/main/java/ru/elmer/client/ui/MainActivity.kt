@@ -166,12 +166,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun checkEcu() {
+private fun checkEcu() {
         val checker = elmChecker ?: return
         setIndicator(indEcu, "ECU", "🟡")
         try {
-            val r = checker.checkEcu()
-            setIndicator(indEcu, "ECU", if (r.supportsObd) "🟢" else "🔴")
+            val raw = checker.getElm()?.sendCommand("010C") ?: ""
+            val ok = raw.startsWith("41")
+            setIndicator(indEcu, "ECU", if (ok) "🟢" else "🔴")
         } catch (e: Exception) {
             setIndicator(indEcu, "ECU", "🔴")
         }
