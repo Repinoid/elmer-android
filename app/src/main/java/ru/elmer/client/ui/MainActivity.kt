@@ -302,8 +302,9 @@ class MainActivity : AppCompatActivity() {
                 val interval = 250L
 
                 var timer: java.util.concurrent.atomic.AtomicBoolean? = null
-                val collector = ru.elmer.client.script.DynamicCollector(elmProto, steps, interval,
+
                 timer = startTimer()
+                val collector = ru.elmer.client.script.DynamicCollector(elmProto, steps, interval,
                     onSample = { idx -> ui { updateLastLine("📊 ${idx + 1} отсчётов") } },
                     onLog = { })
                 dynamicCollector = collector
