@@ -23,8 +23,9 @@ class TestService : Service() {
     private var btSocket: BluetoothSocket? = null
     private var inp: java.io.InputStream? = null
     private var out: java.io.OutputStream? = null
-    private var timerStart = 0L
-    private var timerRunning = false
+
+    // Таймер операции: тикает пока идёт обмен
+    private var opTimerRunning = false
 
     companion object {
         const val TAG = "ElmerTest"
@@ -54,8 +55,6 @@ class TestService : Service() {
     // ── TCP (mock ELM327) ─────────────────────────
 
     private fun runTestTcp(host: String, port: Int) {
-        timerStart = System.currentTimeMillis()
-        startTimer()
         header("TCP $host:$port")
         try {
             socket = Socket(host, port).also { it.soTimeout = 3000 }
@@ -64,7 +63,7 @@ class TestService : Service() {
             say("✅ TCP OK")
         } catch (e: Exception) {
             say("❌ TCP: ${e.message}")
-            stopTimer(); stopSelf(); return
+            stopSelf(); return
         }
         runProtocol()
     }
@@ -72,8 +71,6 @@ class TestService : Service() {
     // ── Bluetooth (реальный ELM327) ───────────────
 
     private fun runTestBt() {
-        timerStart = System.currentTimeMillis()
-        startTimer()
         header("Bluetooth")
 
         val adapter = BluetoothAdapter.getDefaultAdapter()
@@ -221,14 +218,17 @@ class TestService : Service() {
     // ── Низкоуровневые ────────────────────────────
 
     private fun sendAndRead(cmd: String, timeoutMs: Int = 500): Boolean {
+        opTimerStart()  // ▶ таймер поехал
         try {
             out?.write((cmd + "\r").toByteArray())
             out?.flush()
         } catch (e: Exception) {
+            opTimerStop()
             say("❌ WRITE: ${e.message}")
             return false
         }
         val resp = readResponse(timeoutMs)
+        opTimerStop()  // ⏹ стоп
         say("← $resp")
         val decoded = decode(cmd, resp)
         if (decoded != resp.trim()) say("   → $decoded")
@@ -264,7 +264,7 @@ class TestService : Service() {
     }
 
     private fun done(msg: String) {
-        stopTimer()
+        opTimerStop()
         say("══════════════════")
         say(msg)
         say("══════════════════")
@@ -281,23 +281,28 @@ class TestService : Service() {
         Log.i(TAG, msg)
     }
 
-    private fun disconnect() { try { socket?.close() } catch (_: Exception) {} }
-    private fun disconnectBt() { try { btSocket?.close() } catch (_: Exception) {} }
-    override fun onDestroy() { disconnect(); disconnectBt(); super.onDestroy() }
+    // ── Таймер операции ─────────────────────────
 
-    // ── Таймер ──────────────────────────────────
-
-    private fun startTimer() {
-        timerRunning = true
-        thread(name = "Timer", isDaemon = true) {
-            while (timerRunning) {
-                val elapsed = (System.currentTimeMillis() - timerStart) / 1000
+    private fun opTimerStart() {
+        opTimerRunning = true
+        val t0 = System.currentTimeMillis()
+        thread(name = "OpTimer", isDaemon = true) {
+            while (opTimerRunning) {
+                val elapsed = (System.currentTimeMillis() - t0) / 1000
                 sendBroadcast(Intent(BROADCAST_TIMER).apply {
                     putExtra("elapsed", elapsed)
                     setPackage(packageName)
                 })
-                Thread.sleep(500)
+                Thread.sleep(200)  // тик 5 раз в секунду
             }
+        }
+    }
+
+    private fun opTimerStop() {
+        opTimerRunning = false
+        // Сброс через небольшую паузу (даём UI очиститься)
+        thread(name = "OpTimerClr", isDaemon = true) {
+            Thread.sleep(600)
             sendBroadcast(Intent(BROADCAST_TIMER).apply {
                 putExtra("elapsed", -1)
                 setPackage(packageName)
@@ -305,7 +310,7 @@ class TestService : Service() {
         }
     }
 
-    private fun stopTimer() {
-        timerRunning = false
-    }
+    private fun disconnect() { try { socket?.close() } catch (_: Exception) {} }
+    private fun disconnectBt() { try { btSocket?.close() } catch (_: Exception) {} }
+    override fun onDestroy() { disconnect(); disconnectBt(); super.onDestroy() }
 }

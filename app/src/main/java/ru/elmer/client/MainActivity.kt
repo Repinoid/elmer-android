@@ -49,9 +49,7 @@ class MainActivity : AppCompatActivity() {
                 if (elapsed < 0) {
                     tvTimer.text = ""
                 } else {
-                    val min = elapsed / 60
-                    val sec = elapsed % 60
-                    tvTimer.text = "⏱ ${min}:${sec.toString().padStart(2, '0')}"
+                    tvTimer.text = "⏱ ${elapsed}с"
                 }
             }
         }

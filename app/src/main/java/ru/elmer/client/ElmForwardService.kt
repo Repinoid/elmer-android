@@ -41,8 +41,7 @@ class ElmForwardService : Service() {
     private var serverUrl = "https://obdai.ru/api/v1/raw-obd"
     private var sessionId: String? = null  // сохраняем ID сессии от сервера
     private var running = false
-    private var timerStart = 0L
-    private var timerRunning = false
+    private var opTimerRunning = false
 
     companion object {
         const val TAG = "ElmRelay"
@@ -90,8 +89,6 @@ class ElmForwardService : Service() {
     }
 
     private fun btConnect(mac: String) {
-        timerStart = System.currentTimeMillis()
-        startTimer()
         say("BT: $mac...")
         say("🌐 Server: $serverUrl")
         try {
@@ -105,12 +102,10 @@ class ElmForwardService : Service() {
             say("BT: OK")
             fwd("READY")  // кикстарт сервера
             loop()
-        } catch (e: Exception) { say("BT err: ${e.message}"); stopTimer() }
+        } catch (e: Exception) { say("BT err: ${e.message}") }
     }
 
     private fun tcpConnect(host: String, port: Int) {
-        timerStart = System.currentTimeMillis()
-        startTimer()
         say("TCP: $host:$port...")
         say("🌐 Server: $serverUrl")
         try {
@@ -120,7 +115,7 @@ class ElmForwardService : Service() {
             say("TCP: OK")
             fwd("READY")  // кикстарт сервера
             loop()
-        } catch (e: Exception) { say("TCP err: ${e.message}"); stopTimer() }
+        } catch (e: Exception) { say("TCP err: ${e.message}") }
     }
 
     private fun loop() {
@@ -148,6 +143,9 @@ class ElmForwardService : Service() {
     }
 
     private fun fwd(raw: String) {
+        // Пришёл ответ на команду → стоп таймера
+        if (raw != "READY") opTimerStop()
+
         val preview = if (raw.length > 50) raw.take(50) + "…" else raw
         say("← $preview")
         try {
@@ -195,6 +193,7 @@ class ElmForwardService : Service() {
 
     private fun write(data: String) {
         try {
+            opTimerStart()  // ▶ начали операцию
             out?.write((data + "\r").toByteArray())
             out?.flush()
         } catch (_: Exception) {}
@@ -211,7 +210,7 @@ class ElmForwardService : Service() {
 
     private fun disconnect() {
         running = false
-        stopTimer()
+        opTimerStop()
         try { btSocket?.close() } catch (_: Exception) {}
         try { tcpSocket?.close() } catch (_: Exception) {}
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -245,29 +244,31 @@ class ElmForwardService : Service() {
 
     override fun onDestroy() { disconnect(); super.onDestroy() }
 
-    // ── Таймер ──────────────────────────────────
+    // ── Таймер операции (тикает пока идёт обмен) ─
 
-    private fun startTimer() {
-        timerRunning = true
-        thread(name = "Timer", isDaemon = true) {
-            while (timerRunning) {
-                val elapsed = (System.currentTimeMillis() - timerStart) / 1000
-                val intent = Intent(BROADCAST_TIMER).apply {
+    private fun opTimerStart() {
+        opTimerRunning = true
+        val t0 = System.currentTimeMillis()
+        thread(name = "OpTimer", isDaemon = true) {
+            while (opTimerRunning) {
+                val elapsed = (System.currentTimeMillis() - t0) / 1000
+                sendBroadcast(Intent(BROADCAST_TIMER).apply {
                     putExtra("elapsed", elapsed)
                     setPackage(packageName)
-                }
-                sendBroadcast(intent)
-                Thread.sleep(500)
+                })
+                Thread.sleep(200)
             }
-            // Финальный сброс
+        }
+    }
+
+    private fun opTimerStop() {
+        opTimerRunning = false
+        thread(name = "OpTimerClr", isDaemon = true) {
+            Thread.sleep(600)
             sendBroadcast(Intent(BROADCAST_TIMER).apply {
                 putExtra("elapsed", -1)
                 setPackage(packageName)
             })
         }
-    }
-
-    private fun stopTimer() {
-        timerRunning = false
     }
 }
