@@ -218,11 +218,11 @@ class MainActivity : AppCompatActivity() {
     private fun scanDtc() {
         val dev = elmDevice ?: run { appendStatus("\n❌ ELM не найден"); return }
         appendStatus("\n─── Сканирование ошибок ───")
-        val timer = startTimer()
+        var timer: java.util.concurrent.atomic.AtomicBoolean? = null
         thread(name = "DtcScan", isDaemon = true) {
             val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
             val r = checker.scanDtc()
-            timer.set(false)
+            timer?.set(false)
             runOnUiThread {
                 if (r == null) {
                     appendStatus("\n❌ ELM не отвечает")
@@ -301,8 +301,9 @@ class MainActivity : AppCompatActivity() {
                 ).map { ru.elmer.client.script.DynamicCollector.ElmStep(it.second, it.first, it.second) }
                 val interval = 250L
 
-                val timer = startTimer()
+                var timer: java.util.concurrent.atomic.AtomicBoolean? = null
                 val collector = ru.elmer.client.script.DynamicCollector(elmProto, steps, interval,
+                timer = startTimer()
                     onSample = { idx -> ui { updateLastLine("📊 ${idx + 1} отсчётов") } },
                     onLog = { })
                 dynamicCollector = collector
@@ -310,12 +311,12 @@ class MainActivity : AppCompatActivity() {
 
                 while (state == State.START && collector.isRunning()) Thread.sleep(200)
                 val samples = collector.stop()
-                timer.set(false)
+                timer?.set(false)
                 dynamicSamples = samples.toMutableList()
                 ui { appendStatus("\n📊 Записано: ${samples.size} отсчётов") }
                 ui { appendStatus("\nНажмите ➤ для отправки на сервер.") }
             } catch (e: Exception) {
-                timer.set(false)
+                timer?.set(false)
                 ui { appendStatus("\n❌ ${e.message}") }
             }
         }
