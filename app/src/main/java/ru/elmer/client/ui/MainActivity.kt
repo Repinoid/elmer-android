@@ -47,7 +47,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnDynStart: Button
     private lateinit var btnDynIdle: Button
     private lateinit var btnDynDrive: Button
-    private lateinit var dynamicButtons: LinearLayout
     private lateinit var scrollOutput: ScrollView
 
     private val btAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
@@ -120,7 +119,6 @@ class MainActivity : AppCompatActivity() {
         btnDynStart = findViewById(R.id.btn_dyn_start)
         btnDynIdle = findViewById(R.id.btn_dyn_idle)
         btnDynDrive = findViewById(R.id.btn_dyn_drive)
-        dynamicButtons = findViewById(R.id.dynamic_buttons)
         scrollOutput = findViewById(R.id.scroll_output)
 
         btnSend.setOnClickListener { sendToLlm() }
@@ -128,10 +126,15 @@ class MainActivity : AppCompatActivity() {
             appendStatus("\nГотов")
             btnClose.visibility = android.view.View.GONE
             btnSend.visibility = android.view.View.GONE
-            dynamicButtons.visibility = android.view.View.GONE
+            btnDynIdle.visibility = android.view.View.GONE
+            btnDynDrive.visibility = android.view.View.GONE
+            btnDynStart.visibility = android.view.View.GONE
             // Вернуть кнопки
-            findViewById<LinearLayout>(R.id.top_buttons).visibility = android.view.View.VISIBLE
-            findViewById<LinearLayout>(R.id.check_section).visibility = android.view.View.VISIBLE
+            btnDtc.visibility = android.view.View.VISIBLE
+            btnScript.visibility = android.view.View.VISIBLE
+            btnTest.visibility = android.view.View.VISIBLE
+            btnCheckElm.visibility = android.view.View.VISIBLE
+            btnCheckEcu.visibility = android.view.View.VISIBLE
             btnHistory.visibility = android.view.View.VISIBLE
             cbFullMode.visibility = android.view.View.VISIBLE
             tvDtcStatus.visibility = android.view.View.VISIBLE

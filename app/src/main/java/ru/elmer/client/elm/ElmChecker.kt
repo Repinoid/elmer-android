@@ -181,13 +181,25 @@ class ElmChecker(
     private fun connectAndInit(): Boolean {
         try {
             connect()
+            Thread.sleep(400)  // даём ELM проснуться после коннекта
             log("✅ BT OK")
             log("─── Проверка ELM327 ───")
             try { elm!!.init() } catch (e: Exception) { log("⚠️ init: ${e.message}") }
             return true
         } catch (e: Exception) {
             log("❌ ${e.message}")
-            return false
+            // Retry один раз
+            try {
+                Thread.sleep(600)
+                connect()
+                Thread.sleep(400)
+                log("✅ BT OK (retry)")
+                try { elm!!.init() } catch (e2: Exception) { log("⚠️ init: ${e2.message}") }
+                return true
+            } catch (e2: Exception) {
+                log("❌ retry: ${e2.message}")
+                return false
+            }
         }
     }
 
@@ -218,8 +230,6 @@ class ElmChecker(
 
         // На всякий случай закроем старый сокет, если он есть, но не connected
         try { socket?.close() } catch (_: Exception) {}
-        // Задержка — некоторые ELM долго просыпаются
-        Thread.sleep(800)
 
         try {
             val s = device.createRfcommSocketToServiceRecord(SPP_UUID)
