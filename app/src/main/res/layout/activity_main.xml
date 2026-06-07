@@ -17,7 +17,7 @@
         <TextView android:id="@+id/ind_ecu" android:layout_width="wrap_content" android:layout_height="wrap_content"
             android:text="ECU 🔴" android:textSize="11sp" android:textColor="#cccccc" android:padding="1dp" android:layout_marginEnd="4dp" android:clickable="true" android:focusable="true" />
         <TextView android:id="@+id/ind_llm" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="🤓 🔴" android:textSize="11sp" android:textColor="#cccccc" android:padding="1dp" android:clickable="true" android:focusable="true" />
+            android:text="🎓 🔴" android:textSize="11sp" android:textColor="#cccccc" android:padding="1dp" android:clickable="true" android:focusable="true" />
     </LinearLayout>
 
     <Button android:id="@+id/btn_action" android:layout_width="match_parent" android:layout_height="wrap_content"
