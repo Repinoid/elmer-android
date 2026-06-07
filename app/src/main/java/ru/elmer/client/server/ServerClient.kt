@@ -99,7 +99,8 @@ class ServerClient(
     /** Загружает батч ответов на сервер. Возвращает JSON-ответ или null. */
     fun uploadSession(sessionId: Long, responses: List<Map<String, String?>>,
                       clientInfo: Map<String, String> = emptyMap(),
-                      carInfo: String = ""): JSONObject? {
+                      carInfo: String = "",
+                      dynamicSamples: List<List<Map<String, String?>>>? = null): JSONObject? {
         Log.i(TAG, "Uploading session $sessionId (${responses.size} responses)")
 
         // UUID генерируется один раз до ретраев (идемпотентность)
@@ -120,6 +121,23 @@ class ServerClient(
                     })
                 }
             })
+            if (dynamicSamples != null && dynamicSamples.isNotEmpty()) {
+                put("dynamic_samples", JSONArray().apply {
+                    for (sample in dynamicSamples) {
+                        put(JSONArray().apply {
+                            for (r in sample) {
+                                put(JSONObject().apply {
+                                    put("step_id", r["step_id"] ?: "")
+                                    put("cmd", r["cmd"] ?: "")
+                                    put("raw", r["raw"] ?: "")
+                                    put("decoded", r["decoded"] ?: "")
+                                    put("timestamp", r["timestamp"] ?: "")
+                                })
+                            }
+                        })
+                    }
+                })
+            }
             put("client_info", JSONObject().apply {
                 for ((k, v) in clientInfo) put(k, v)
             })

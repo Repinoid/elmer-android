@@ -213,8 +213,31 @@ class MainActivity : AppCompatActivity() {
             action = ScriptRunnerService.ACTION_RUN
             putExtra(ScriptRunnerService.EXTRA_SCRIPT_URL, "https://obdai.ru/api/v1/script?mode=$mode")
             if (carInfo.isNotEmpty()) putExtra(ScriptRunnerService.EXTRA_CAR_INFO, carInfo)
+            // Динамические сэмплы, если есть
+            dynamicSamples?.let { samples ->
+                if (samples.isNotEmpty()) {
+                    val jsonArr = org.json.JSONArray()
+                    for (sample in samples) {
+                        val batch = org.json.JSONArray()
+                        for (r in sample) {
+                            batch.put(org.json.JSONObject().apply {
+                                put("step_id", r.stepId)
+                                put("cmd", r.cmd)
+                                put("raw", r.raw)
+                                put("decoded", r.decoded)
+                                put("timestamp", "")
+                            })
+                        }
+                        jsonArr.put(batch)
+                    }
+                    intent.putExtra(ScriptRunnerService.EXTRA_DYNAMIC_SAMPLES, jsonArr.toString())
+                }
+            }
         }
         ContextCompat.startForegroundService(this, intent)
+
+        // Очищаем динамические сэмплы после отправки
+        dynamicSamples = null
 
         tvStatus.text = ""
         tvStatus.text = "⏳ Инициализация ELM327..."

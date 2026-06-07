@@ -47,6 +47,7 @@ class ScriptRunnerService : Service() {
     private var timeoutCount: Int = 0
     private var scriptMode: String = ""
     private var carInfo: String = ""
+    private var dynamicSamplesJson: String? = null
 
     companion object {
         const val TAG = "ElmerScript"
@@ -58,6 +59,7 @@ class ScriptRunnerService : Service() {
         const val EXTRA_SERVER_URL = "server_url"
         const val EXTRA_DEBUG_HOST = "debug_host"
         const val EXTRA_CAR_INFO = "car_info"
+        const val EXTRA_DYNAMIC_SAMPLES = "dynamic_samples"
         const val BROADCAST_STATUS = "ru.elmer.client.SCRIPT_STATUS"
         const val BROADCAST_PROMPT = "ru.elmer.client.SCRIPT_PROMPT"
         const val BROADCAST_STAGE  = "ru.elmer.client.SCRIPT_STAGE"
@@ -113,6 +115,7 @@ class ScriptRunnerService : Service() {
             ?: "https://obdai.ru/api/v1/script"
         serverUrl = intent.getStringExtra(EXTRA_SERVER_URL) ?: "https://obdai.ru"
         carInfo = intent.getStringExtra(EXTRA_CAR_INFO) ?: ""
+        dynamicSamplesJson = intent.getStringExtra(EXTRA_DYNAMIC_SAMPLES)
 
         scriptMode = if (scriptUrl.contains("full")) "full" else "test"
         startTime = System.currentTimeMillis()
@@ -230,7 +233,8 @@ class ScriptRunnerService : Service() {
             val progress = UploadProgress(this, packageName, count, dataSizeKB)
             progress.start()
             val resp = try {
-                client.uploadSession(sessionId, responses, clientInfo, carInfo)
+                val dynSamples = parseDynamicSamples()
+                client.uploadSession(sessionId, responses, clientInfo, carInfo, dynSamples)
             } finally {
                 progress.stop()
             }
@@ -313,6 +317,26 @@ class ScriptRunnerService : Service() {
         info["transport"] = "bt"
 
         return info
+    }
+
+    private fun parseDynamicSamples(): List<List<Map<String, String?>>>? {
+        val json = dynamicSamplesJson ?: return null
+        return try {
+            val arr = org.json.JSONArray(json)
+            (0 until arr.length()).map { i ->
+                val batch = arr.getJSONArray(i)
+                (0 until batch.length()).map { j ->
+                    val obj = batch.getJSONObject(j)
+                    mapOf(
+                        "step_id" to obj.optString("step_id"),
+                        "cmd" to obj.optString("cmd"),
+                        "raw" to obj.optString("raw"),
+                        "decoded" to obj.optString("decoded"),
+                        "timestamp" to obj.optString("timestamp"),
+                    )
+                }
+            }
+        } catch (e: Exception) { null }
     }
 
     // ── Helpers ─────────────────────────────────────────
