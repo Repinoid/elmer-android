@@ -170,12 +170,9 @@ private fun checkEcu() {
         val checker = elmChecker ?: return
         setIndicator(indEcu, "ECU", "🟡")
         try {
-            val raw = checker.getElm()?.sendCommand("010C") ?: ""
-            val ok = raw.startsWith("41")
-            setIndicator(indEcu, "ECU", if (ok) "🟢" else "🔴")
-        } catch (e: Exception) {
-            setIndicator(indEcu, "ECU", "🔴")
-        }
+            // 03 (DTC) — работает на всех авто, в отличие от 010C
+            val raw = checker.getElm()?.sendCommand("03") ?: ""
+            val ok = raw.startsWith("43")
     }
 
     private fun checkLlm() {
