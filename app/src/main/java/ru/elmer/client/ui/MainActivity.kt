@@ -104,6 +104,24 @@ class MainActivity : AppCompatActivity() {
         runOnUiThread {
             tv.text = "$label $color"
             tv.setTextColor(c)
+            updateUiState()
+        }
+    }
+
+    private fun updateUiState() {
+        val elmOk = indElm.text.contains("🟢")
+        val llmOk = indLlm.text.contains("🟢")
+        btnAction.isEnabled = elmOk
+        btnAction.alpha = if (elmOk) 1.0f else 0.4f
+        etUserInput.isEnabled = llmOk
+        etUserInput.alpha = if (llmOk) 1.0f else 0.4f
+        btnSend.isEnabled = llmOk
+        btnSend.alpha = if (llmOk) 1.0f else 0.4f
+        if (!elmOk) {
+            btnAction.text = "⚠️ Нет ELM"
+            state = State.INIT
+        } else if (state == State.INIT) {
+            btnAction.text = "⚠️ ОШИБКИ"
         }
     }
 
@@ -180,33 +198,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun onAction() {
         when (state) {
-            State.INIT -> {
-                if (!indElm.text.contains("🟢")) {
-                    appendStatus("\n⚠️ Нет связи с ELM — сканирование невозможно")
-                    return
-                }
-                scanDtc()
-            }
-            State.DTC  -> {
-                if (!indElm.text.contains("🟢")) {
-                    appendStatus("\n⚠️ Нет связи с ELM — диагностика невозможна")
-                    return
-                }
-                runDiagnostics()
-            }
-            State.DIAG -> {
-                if (!indElm.text.contains("🟢")) {
-                    appendStatus("\n⚠️ Нет связи с ELM — тест невозможен")
-                    return
-                }
-                startDynamicRecording()
-            }
-            State.START -> { /* запись идёт, ждём СТОП */ }
+            State.INIT -> scanDtc()
+            State.DTC  -> runDiagnostics()
+            State.DIAG -> startDynamicRecording()
+            State.START -> { }
             State.STOP  -> stopDynamicRecording()
         }
     }
-
-    private fun elmOk(): Boolean = indElm.text.contains("🟢")
 
     private fun setActionState(newState: State) {
         state = newState
