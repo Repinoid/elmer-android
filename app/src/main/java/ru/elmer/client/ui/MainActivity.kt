@@ -118,7 +118,8 @@ class MainActivity : AppCompatActivity() {
         btnSend.isEnabled = llmOk
         btnSend.alpha = if (llmOk) 1.0f else 0.4f
         if (!elmOk) {
-            btnAction.text = "⚠️ Нет ELM"
+            val elmGreen = indElm.text.contains("🟢")
+            btnAction.text = if (elmGreen) "⚠️ Нет ECU" else "⚠️ Нет ELM"
             state = State.INIT
         } else if (state == State.INIT) {
             btnAction.text = "⚠️ ОШИБКИ"

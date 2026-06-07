@@ -118,7 +118,7 @@ class ElmChecker(
         val raw07 = send("07")
         val dtc07 = parseDtcCodes(raw07)
         codes.addAll(dtc07)
-        disconnect()
+        // НЕ закрываем — соединение переиспользуется для динамического теста
         return codes.distinct()
     }
 
