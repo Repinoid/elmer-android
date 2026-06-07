@@ -295,7 +295,7 @@ class MainActivity : AppCompatActivity() {
                     ru.elmer.client.script.DynamicCollector.ElmStep(s.getString("id"), s.getString("cmd"), s.getString("desc"))
                 }
                 val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
-                if (!checker.isConnected()) { checker.ensureConnected() }
+                checker.ensureConnected()
                 val elmProto = checker.getElm() ?: run { ui { appendStatus("\n❌ Нет связи с ELM") }; return@thread }
 
                 val timer = startTimer()
