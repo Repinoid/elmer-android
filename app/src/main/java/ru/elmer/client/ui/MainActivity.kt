@@ -124,6 +124,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private var debugMode = true  // временно — логировать ответы в вывод
+
+    private fun debugLog(msg: String) {
+        if (debugMode) appendStatus("\n🔹 $msg")
+    }
+
     private fun startChecks() {
         thread(name = "StartChecks", isDaemon = true) {
             checkServer()  // сама вызовет checkLlm если 🟢
@@ -133,58 +139,75 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkServer() {
         setIndicator(indServer, "📡", "🟡")
+        debugLog("Пинг сервера...")
         try {
             val url = java.net.URL("https://obdai.ru/api/v1/ping")
             val conn = url.openConnection() as java.net.HttpURLConnection
             conn.connectTimeout = 3000; conn.readTimeout = 3000
-            val ok = conn.responseCode == 200
+            val code = conn.responseCode
             conn.disconnect()
-            setIndicator(indServer, "📡", if (ok) "🟢" else "🔴")
-            if (ok) checkLlm()
+            debugLog("Сервер: $code")
+            setIndicator(indServer, "📡", if (code == 200) "🟢" else "🔴")
+            if (code == 200) checkLlm()
         } catch (e: Exception) {
+            debugLog("Сервер: ${e.message}")
             setIndicator(indServer, "📡", "🔴")
         }
     }
 
     private fun checkElm() {
         setIndicator(indElm, "ELM", "🟡")
+        debugLog("Поиск ELM...")
         val dev = findElmDevice()
-        if (dev == null) { setIndicator(indElm, "ELM", "🔴"); return }
+        if (dev == null) { debugLog("ELM не найден"); setIndicator(indElm, "ELM", "🔴"); return }
         elmDevice = dev
+        debugLog("Найден: ${dev.name} (${dev.address})")
         try {
             val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
             val r = checker.checkDevice()
             if (r != null) {
                 elmChecker = checker
+                debugLog("ELM: версия=${r.version}, протокол=${r.protocol}, напряжение=${r.voltage}")
                 setIndicator(indElm, "ELM", "🟢")
                 checkEcu()
             } else {
+                debugLog("ELM: нет ответа")
                 setIndicator(indElm, "ELM", "🔴")
             }
         } catch (e: Exception) {
+            debugLog("ELM: ${e.message}")
             setIndicator(indElm, "ELM", "🔴")
         }
     }
 
-private fun checkEcu() {
+    private fun checkEcu() {
         val checker = elmChecker ?: return
         setIndicator(indEcu, "ECU", "🟡")
+        debugLog("Запрос ЭБУ (03)...")
         try {
-            // 03 (DTC) — работает на всех авто, в отличие от 010C
             val raw = checker.getElm()?.sendCommand("03") ?: ""
+            debugLog("ЭБУ ответ: ${raw.take(40)}")
             val ok = raw.startsWith("43")
+            setIndicator(indEcu, "ECU", if (ok) "🟢" else "🔴")
+        } catch (e: Exception) {
+            debugLog("ЭБУ: ${e.message}")
+            setIndicator(indEcu, "ECU", "🔴")
+        }
     }
 
     private fun checkLlm() {
         setIndicator(indLlm, "LLM", "🟡")
+        debugLog("Пинг LLM...")
         try {
             val url = java.net.URL("https://obdai.ru/api/v1/ping-llm")
             val conn = url.openConnection() as java.net.HttpURLConnection
             conn.connectTimeout = 5000; conn.readTimeout = 5000
-            val ok = conn.responseCode == 200
+            val code = conn.responseCode
             conn.disconnect()
-            setIndicator(indLlm, "LLM", if (ok) "🟢" else "🔴")
+            debugLog("LLM: $code")
+            setIndicator(indLlm, "LLM", if (code == 200) "🟢" else "🔴")
         } catch (e: Exception) {
+            debugLog("LLM: ${e.message}")
             setIndicator(indLlm, "LLM", "🔴")
         }
     }
@@ -214,6 +237,7 @@ private fun checkEcu() {
 
     private fun scanDtc() {
         val dev = elmDevice ?: run { appendStatus("\n❌ ELM не найден"); return }
+        tvStatus.text = ""  // очищаем вывод (логи проверок)
         appendStatus("\n─── Сканирование ошибок ───")
         var timer: java.util.concurrent.atomic.AtomicBoolean? = null
         thread(name = "DtcScan", isDaemon = true) {
