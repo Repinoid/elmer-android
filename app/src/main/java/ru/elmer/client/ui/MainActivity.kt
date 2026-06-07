@@ -348,7 +348,10 @@ class MainActivity : AppCompatActivity() {
                     if (resp != null) {
                         db.markUploaded(sid)
                         val d = resp.optString("diagnosis", "")
-                        if (d.isNotEmpty()) ui { appendStatus("\n🩺 $d") }
+                        if (d.isNotEmpty()) {
+                            db.saveDiagnosis(sid, d)
+                            ui { appendStatus("\n🩺 $d") }
+                        }
                     } else {
                         ui { appendStatus("\n⚠️ Сервер недоступен") }
                     }
