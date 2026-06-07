@@ -547,9 +547,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-        try { info["app_version"] = packageManager.getPackageInfo(packageName, 0).versionName } catch (_: Exception) {}
-        return info
-    }
 
     private fun showHistory() {
         val db = SessionDb(this)
