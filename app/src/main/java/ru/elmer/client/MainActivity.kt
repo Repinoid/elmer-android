@@ -104,8 +104,11 @@ class MainActivity : AppCompatActivity() {
         // Очищаем экран
         tvStatus.text = ""
 
-        registerReceiver(testReceiver, IntentFilter(TestService.BROADCAST_STATUS),
-            ContextCompat.RECEIVER_NOT_EXPORTED)
+        if (!testReceiverRegistered) {
+            registerReceiver(testReceiver, IntentFilter(TestService.BROADCAST_STATUS),
+                ContextCompat.RECEIVER_NOT_EXPORTED)
+            testReceiverRegistered = true
+        }
 
         tvStatus.text = "⏳ Тест..."
     }
@@ -118,6 +121,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
+    private var testReceiverRegistered = false
 
     private fun startDiagnostics() {
         val url = etUrl.text.toString().trim()
