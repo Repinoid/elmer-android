@@ -226,6 +226,19 @@
         android:visibility="gone"
         android:layout_marginTop="4dp" />
 
+    <!-- Кнопка СТАРТ/СТОП динамического теста -->
+    <Button
+        android:id="@+id/btn_dyn_start"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="▶ СТАРТ"
+        android:textSize="14sp"
+        android:textColor="#ffffff"
+        android:backgroundTint="#4CAF50"
+        android:padding="10dp"
+        android:visibility="gone"
+        android:layout_marginTop="4dp" />
+
     <!-- Динамические тесты (после диагноза) -->
     <LinearLayout
         android:id="@+id/dynamic_buttons"

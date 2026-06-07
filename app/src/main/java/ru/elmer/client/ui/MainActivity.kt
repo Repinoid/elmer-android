@@ -44,6 +44,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etUserInput: EditText
     private lateinit var btnSend: Button
     private lateinit var btnClose: Button
+    private lateinit var btnDynStart: Button
     private lateinit var btnDynIdle: Button
     private lateinit var btnDynDrive: Button
     private lateinit var dynamicButtons: LinearLayout
@@ -116,6 +117,7 @@ class MainActivity : AppCompatActivity() {
         etUserInput = findViewById(R.id.et_user_input)
         btnSend = findViewById(R.id.btn_send)
         btnClose = findViewById(R.id.btn_close)
+        btnDynStart = findViewById(R.id.btn_dyn_start)
         btnDynIdle = findViewById(R.id.btn_dyn_idle)
         btnDynDrive = findViewById(R.id.btn_dyn_drive)
         dynamicButtons = findViewById(R.id.dynamic_buttons)
@@ -516,24 +518,22 @@ class MainActivity : AppCompatActivity() {
             appendStatus("\n⚠️ Нажмите СТОП после завершения.")
         }
 
-        // Превращаем кнопку в СТАРТ
+        // Показываем кнопку СТАРТ
         dynamicButtons.visibility = android.view.View.GONE
-        // Показываем верхнюю панель с кнопками (скрыта после done)
         findViewById<LinearLayout>(R.id.top_buttons).visibility = android.view.View.VISIBLE
-        btnScript.text = "▶ СТАРТ $label"
-        btnScript.isEnabled = true
-        btnScript.visibility = android.view.View.VISIBLE
+        btnDynStart.text = "▶ СТАРТ $label"
+        btnDynStart.setBackgroundColor(0xFF4CAF50.toInt())
+        btnDynStart.visibility = android.view.View.VISIBLE
 
         var started = false
 
-        // Снимаем старый listener чтобы не накапливать
-        btnScript.setOnClickListener(null)
-        btnScript.setOnClickListener {
+        btnDynStart.setOnClickListener(null)
+        btnDynStart.setOnClickListener {
             if (!started) {
                 // СТАРТ
                 started = true
-                btnScript.text = "⏹ СТОП $label"
-                btnScript.setBackgroundColor(0xFFd32f2f.toInt())
+                btnDynStart.text = "⏹ СТОП $label"
+                btnDynStart.setBackgroundColor(0xFFd32f2f.toInt())
                 appendStatus("\n▶ Запись началась...")
 
                 thread(name = "DynamicTest", isDaemon = true) {
@@ -597,10 +597,8 @@ class MainActivity : AppCompatActivity() {
                 // СТОП
                 started = false
                 appendStatus("\n⏹ Запись завершена")
-                btnScript.visibility = android.view.View.GONE
+                btnDynStart.visibility = android.view.View.GONE
                 dynamicButtons.visibility = android.view.View.VISIBLE
-                // Вернуть кнопки Диагностика и Ошибки
-                findViewById<LinearLayout>(R.id.top_buttons).visibility = android.view.View.VISIBLE
             }
         }
     }
