@@ -109,7 +109,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateUiState() {
-        val elmOk = indElm.text.contains("🟢") && indEcu.text.contains("🟢")
+        val elmOk = indElm.text.contains("🟢")
         val llmOk = indLlm.text.contains("🟢")
         btnAction.isEnabled = elmOk
         btnAction.alpha = if (elmOk) 1.0f else 0.4f
@@ -117,10 +117,8 @@ class MainActivity : AppCompatActivity() {
         etUserInput.alpha = if (llmOk) 1.0f else 0.4f
         btnSend.isEnabled = llmOk
         btnSend.alpha = if (llmOk) 1.0f else 0.4f
-        if (!elmOk) {
-            val elmGreen = indElm.text.contains("🟢")
-            btnAction.text = if (elmGreen) "⚠️ Нет ECU" else "⚠️ Нет ELM"
-            state = State.INIT
+        if (!elmOk && state == State.INIT) {
+            btnAction.text = "⚠️ Нет ELM"
         } else if (state == State.INIT) {
             btnAction.text = "⚠️ ОШИБКИ"
         }
