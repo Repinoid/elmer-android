@@ -5,165 +5,90 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.content.*
 import android.content.pm.PackageManager
-import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
-import android.widget.Button
-import android.widget.CheckBox
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import kotlin.concurrent.thread
-import ru.elmer.client.BuildConfig
 import ru.elmer.client.R
 import ru.elmer.client.db.SessionDb
 import ru.elmer.client.script.ScriptRunnerService
 
-/**
- * Тонкий клиент Elmer — одна кнопка.
- * Подключается к ELM327 по Bluetooth, шлёт сырые OBD-ответы на сервер.
- */
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var btnDtc: Button
-    private lateinit var btnScript: Button
-    private lateinit var tvDtcStatus: TextView
+    private lateinit var btnAction: Button
     private lateinit var btnHistory: Button
-    private lateinit var btnTest: Button
-    private lateinit var btnCheckElm: Button
-    private lateinit var btnCheckEcu: Button
-    private var elmChecker: ru.elmer.client.elm.ElmChecker? = null
-    private lateinit var cbFullMode: CheckBox
-    private lateinit var tvStatus: TextView
-    private lateinit var tvPrompt: TextView
-    private lateinit var etUserInput: EditText
     private lateinit var btnSend: Button
-    private lateinit var btnClose: Button
-    private lateinit var btnDynStart: Button
-    private lateinit var btnDynIdle: Button
-    private lateinit var btnDynDrive: Button
+    private lateinit var tvStatus: TextView
+    private lateinit var etUserInput: EditText
     private lateinit var scrollOutput: ScrollView
+
+    private lateinit var indServer: TextView
+    private lateinit var indElm: TextView
+    private lateinit var indEcu: TextView
+    private lateinit var indLlm: TextView
 
     private val btAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     private var elmDevice: BluetoothDevice? = null
+    private var elmChecker: ru.elmer.client.elm.ElmChecker? = null
     private var scriptRegistered = false
-    private val chatHistory = mutableListOf<Pair<String, String>>()  // (role, text)
+    private val chatHistory = mutableListOf<Pair<String, String>>()
+
+    private var dynamicCollector: ru.elmer.client.script.DynamicCollector? = null
+    private var dynamicSamples: MutableList<List<ru.elmer.client.script.DynamicCollector.SampleResponse>>? = null
+
+    enum class State { INIT, DTC, DIAG, START, STOP }
+    private var state = State.INIT
 
     companion object {
         const val REQUEST_BT_PERMISSIONS = 1
-        const val REQUEST_ENABLE_BT = 2
-        private const val PING_THROTTLE_MS = 7_000L       // 7с при ошибках
-        private const val PING_OK_THROTTLE_MS = 60_000L   // 60с при успехе
     }
 
-    private var lastPingTime = 0L
-    private var lastPingLlmTime = 0L
-    private var lastPingOk = false
-
-    private fun addApiKey(conn: java.net.HttpURLConnection) {
-        val key = BuildConfig.API_KEY
-        if (key.isNotEmpty()) conn.setRequestProperty("X-Api-Key", key)
-    }
-
-    // ⚠️ statusReceiver удалён — scriptStatusReceiver уже слушает BROADCAST_STATUS (дубликат)
+    // ── Жизненный цикл ──────────────────────────────────
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Восстановление chatHistory после поворота
-        savedInstanceState?.getString("chat_json")?.let { json ->
-            try {
-                val arr = org.json.JSONArray(json)
-                for (i in 0 until arr.length()) {
-                    val obj = arr.getJSONObject(i)
-                    chatHistory.add(obj.getString("role") to obj.getString("content"))
-                }
-            } catch (_: Exception) {}
-        }
-
-        // Android 12+ Bluetooth разрешения
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val missing = mutableListOf<String>()
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED)
                 missing.add(Manifest.permission.BLUETOOTH_CONNECT)
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED)
                 missing.add(Manifest.permission.BLUETOOTH_SCAN)
-            if (missing.isNotEmpty()) {
+            if (missing.isNotEmpty())
                 ActivityCompat.requestPermissions(this, missing.toTypedArray(), REQUEST_BT_PERMISSIONS)
-            }
         }
 
-        btnScript = findViewById(R.id.btn_script)
-        btnDtc = findViewById(R.id.btn_dtc)
-        tvDtcStatus = findViewById(R.id.tv_dtc_status)
-        cbFullMode = findViewById(R.id.cb_full_mode)
+        btnAction = findViewById(R.id.btn_action)
         btnHistory = findViewById(R.id.btn_history)
-        btnCheckElm = findViewById(R.id.btn_check_elm)
-        btnCheckEcu = findViewById(R.id.btn_check_ecu)
-
-        btnDtc.setOnClickListener { scanDtc() }
-        btnHistory.setOnClickListener { showHistory() }
-        btnCheckElm.setOnClickListener { checkElm() }
-        btnCheckEcu.setOnClickListener { checkEcu() }
-        tvStatus = findViewById(R.id.tv_status)
-        tvPrompt = findViewById(R.id.tv_prompt)
-        etUserInput = findViewById(R.id.et_user_input)
         btnSend = findViewById(R.id.btn_send)
-        btnClose = findViewById(R.id.btn_close)
-        btnDynStart = findViewById(R.id.btn_dyn_start)
-        btnDynIdle = findViewById(R.id.btn_dyn_idle)
-        btnDynDrive = findViewById(R.id.btn_dyn_drive)
+        tvStatus = findViewById(R.id.tv_status)
+        etUserInput = findViewById(R.id.et_user_input)
         scrollOutput = findViewById(R.id.scroll_output)
 
-        btnTest = findViewById(R.id.btn_test)
-        btnTest.setOnClickListener { startTest() }
+        indServer = findViewById(R.id.ind_server)
+        indElm = findViewById(R.id.ind_elm)
+        indEcu = findViewById(R.id.ind_ecu)
+        indLlm = findViewById(R.id.ind_llm)
 
-        btnSend.setOnClickListener { sendToLlm() }
-        btnClose.setOnClickListener {
-            appendStatus("\nГотов")
-            btnClose.visibility = android.view.View.GONE
-            btnSend.visibility = android.view.View.GONE
-            btnDynIdle.visibility = android.view.View.GONE
-            btnDynDrive.visibility = android.view.View.GONE
-            btnDynStart.visibility = android.view.View.GONE
-            // Вернуть кнопки
-            btnDtc.visibility = android.view.View.VISIBLE
-            btnScript.visibility = android.view.View.VISIBLE
-            btnTest.visibility = android.view.View.VISIBLE
-            btnCheckElm.visibility = android.view.View.VISIBLE
-            btnCheckEcu.visibility = android.view.View.VISIBLE
-            btnHistory.visibility = android.view.View.VISIBLE
-            cbFullMode.visibility = android.view.View.VISIBLE
-            tvDtcStatus.visibility = android.view.View.VISIBLE
-        }
+        btnAction.setOnClickListener { onAction() }
+        btnSend.setOnClickListener { onSend() }
+        btnHistory.setOnClickListener { showHistory() }
 
-        btnDynIdle.setOnClickListener { startDynamicTest("idle") }
-        btnDynDrive.setOnClickListener { startDynamicTest("drive") }
+        indServer.setOnClickListener { checkServer() }
+        indElm.setOnClickListener { checkElm() }
+        indEcu.setOnClickListener { checkEcu() }
+        indLlm.setOnClickListener { checkLlm() }
 
-        // Версия из build.gradle (versionName)
         val version = packageManager.getPackageInfo(packageName, 0).versionName
-        val tvVersion = findViewById<TextView>(R.id.tv_version)
-        tvVersion.text = "v$version"
+        findViewById<TextView>(R.id.tv_version).text = "v$version"
 
-        // СКРИПТ
-        btnScript.setOnClickListener { startScript() }
-
-        // Промпты от ScriptRunnerService
         registerScriptReceiver()
-
-        // Восстановление вывода после поворота экрана
-        savedInstanceState?.getString("status_text")?.let {
-            tvStatus.text = it
-        } ?: run {
-            tvStatus.text = "⏳ Загрузка...\n\nНажмите 📡 Сервер для проверки связи.\nНажмите 🔍 ДИАГНОСТИКА для запуска."
-        }
+        startChecks()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -171,267 +96,361 @@ class MainActivity : AppCompatActivity() {
         outState.putString("status_text", tvStatus.text.toString())
     }
 
-    private fun startTest() {
-        thread(name = "ServerTest", isDaemon = true) {
-            val client = ru.elmer.client.server.ServerClient(
-                "https://obdai.ru",
-                "https://obdai.ru/api/v1/script",
-                ""
-            )
+    // ── Светофоры ────────────────────────────────────────
 
-            // Этап 1: сервер (с троттлингом)
-            val now = System.currentTimeMillis()
-            val throttle = if (lastPingOk) PING_OK_THROTTLE_MS else PING_THROTTLE_MS
-            if (now - lastPingTime < throttle) {
-                ui { appendStatus("\n⏱ Сервер: проверка не чаще ${throttle/1000}с") }
-                return@thread
-            }
-            lastPingTime = now
-            ui { appendStatus("\n📡 Сервер...") }
-            val ping = client.ping()
-            if (ping.ok) {
-                lastPingOk = true
-                ui { appendStatus("\n✅ Сервер: ${ping.ms}мс") }
-            } else {
-                lastPingOk = false
-                ui { appendStatus("\n❌ Сервер: ${ping.error}") }
-                return@thread
-            }
+    private fun setIndicator(tv: TextView, icon: String, color: String) {
+        tv.text = "$icon $color"
+    }
 
-            // Этап 2: LLM
-            ui { appendStatus("\n🧠 LLM...") }
-            val llm = client.pingLlm()
-            if (llm.ok) {
-                ui { appendStatus("\n✅ LLM: ${llm.ms}мс") }
+    private fun startChecks() {
+        thread(name = "StartChecks", isDaemon = true) {
+            checkServer()
+            checkElm()
+            if (indServer.text.contains("🟢")) checkLlm()
+            if (indElm.text.contains("🟢")) checkEcu()
+        }
+    }
+
+    private fun checkServer() {
+        setIndicator(indServer, "📡", "🟡")
+        try {
+            val url = java.net.URL("https://obdai.ru/api/v1/ping")
+            val conn = url.openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 3000; conn.readTimeout = 3000
+            val ok = conn.responseCode == 200
+            conn.disconnect()
+            setIndicator(indServer, "📡", if (ok) "🟢" else "🔴")
+            if (ok) checkLlm()
+        } catch (e: Exception) {
+            setIndicator(indServer, "📡", "🔴")
+        }
+    }
+
+    private fun checkElm() {
+        setIndicator(indElm, "🔌", "🟡")
+        val dev = findElmDevice()
+        if (dev == null) { setIndicator(indElm, "🔌", "🔴"); return }
+        elmDevice = dev
+        try {
+            val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
+            val r = checker.checkDevice()
+            if (r != null) {
+                elmChecker = checker
+                setIndicator(indElm, "🔌", "🟢")
+                checkEcu()
             } else {
-                ui { appendStatus("\n⚠️ LLM: ${llm.error}") }
+                setIndicator(indElm, "🔌", "🔴")
+            }
+        } catch (e: Exception) {
+            setIndicator(indElm, "🔌", "🔴")
+        }
+    }
+
+    private fun checkEcu() {
+        val checker = elmChecker ?: return
+        setIndicator(indEcu, "🚗", "🟡")
+        try {
+            val r = checker.checkEcu()
+            setIndicator(indEcu, "🚗", if (r.supportsObd) "🟢" else "🔴")
+        } catch (e: Exception) {
+            setIndicator(indEcu, "🚗", "🔴")
+        }
+    }
+
+    private fun checkLlm() {
+        setIndicator(indLlm, "🧠", "🟡")
+        try {
+            val url = java.net.URL("https://obdai.ru/api/v1/ping-llm")
+            val conn = url.openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 5000; conn.readTimeout = 5000
+            val ok = conn.responseCode == 200
+            conn.disconnect()
+            setIndicator(indLlm, "🧠", if (ok) "🟢" else "🔴")
+        } catch (e: Exception) {
+            setIndicator(indLlm, "🧠", "🔴")
+        }
+    }
+
+    // ── Кнопка-трансформер ──────────────────────────────
+
+    private fun onAction() {
+        when (state) {
+            State.INIT -> scanDtc()
+            State.DTC  -> runDiagnostics()
+            State.DIAG -> startDynamicRecording()
+            State.START -> { /* START уже нажат, ждём */ }
+            State.STOP  -> stopDynamicRecording()
+        }
+    }
+
+    private fun setActionState(newState: State) {
+        state = newState
+        when (newState) {
+            State.INIT -> { btnAction.text = "⚠️ ОШИБКИ"; btnAction.setBackgroundColor(0xFFFF5722.toInt()) }
+            State.DTC  -> { btnAction.text = "🔍 ДИАГНОСТИКА"; btnAction.setBackgroundColor(0xFF2196F3.toInt()) }
+            State.DIAG -> { btnAction.text = "▶ СТАРТ"; btnAction.setBackgroundColor(0xFF4CAF50.toInt()) }
+            State.START -> { btnAction.text = "⏹ СТОП"; btnAction.setBackgroundColor(0xFFd32f2f.toInt()) }
+            State.STOP  -> { btnAction.text = "▶ СТАРТ"; btnAction.setBackgroundColor(0xFF4CAF50.toInt()) }
+        }
+    }
+
+    private fun scanDtc() {
+        val dev = elmDevice ?: run { appendStatus("\n❌ ELM не найден"); return }
+        appendStatus("\n─── Сканирование ошибок ───")
+        val timer = startTimer()
+        thread(name = "DtcScan", isDaemon = true) {
+            val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
+            val r = checker.scanDtc()
+            timer.set(false)
+            runOnUiThread {
+                if (r == null) {
+                    appendStatus("\n❌ ELM не отвечает")
+                } else if (r.isEmpty()) {
+                    appendStatus("\n✅ Ошибок нет")
+                } else {
+                    appendStatus("\n⚠️ Ошибки: ${r.joinToString(", ")}")
+                }
+                setActionState(State.DTC)
             }
         }
     }
 
-    private fun ui(block: () -> Unit) { runOnUiThread(block) }
-
-    private fun startScript() {
-        val mode = if (cbFullMode.isChecked) "full" else "test"
+    private fun runDiagnostics() {
+        val serverOk = indServer.text.contains("🟢")
+        if (!serverOk) {
+            appendStatus("\n⚠️ Сервер недоступен")
+            appendStatus("\nСделайте тест на месте: газ до 3000 об/мин, 3-4 сек, сброс.")
+            setActionState(State.DIAG)
+            return
+        }
         val carInfo = etUserInput.text.toString().trim()
+        val mode = "test"
         val intent = Intent(this, ScriptRunnerService::class.java).apply {
             action = ScriptRunnerService.ACTION_RUN
             putExtra(ScriptRunnerService.EXTRA_SCRIPT_URL, "https://obdai.ru/api/v1/script?mode=$mode")
             if (carInfo.isNotEmpty()) putExtra(ScriptRunnerService.EXTRA_CAR_INFO, carInfo)
-            // Динамические сэмплы, если есть
             dynamicSamples?.let { samples ->
                 if (samples.isNotEmpty()) {
                     val jsonArr = org.json.JSONArray()
                     for (sample in samples) {
                         val batch = org.json.JSONArray()
-                        for (r in sample) {
-                            batch.put(org.json.JSONObject().apply {
-                                put("step_id", r.stepId)
-                                put("cmd", r.cmd)
-                                put("raw", r.raw)
-                                put("decoded", r.decoded)
-                                put("timestamp", "")
-                            })
-                        }
+                        for (r in sample) batch.put(org.json.JSONObject().apply {
+                            put("step_id", r.stepId); put("cmd", r.cmd); put("raw", r.raw); put("decoded", r.decoded)
+                        })
                         jsonArr.put(batch)
                     }
-                    intent.putExtra(ScriptRunnerService.EXTRA_DYNAMIC_SAMPLES, jsonArr.toString())
+                    putExtra(ScriptRunnerService.EXTRA_DYNAMIC_SAMPLES, jsonArr.toString())
                 }
             }
         }
         ContextCompat.startForegroundService(this, intent)
-
-        // Очищаем динамические сэмплы после отправки
-        dynamicSamples = null
-
         tvStatus.text = ""
-        tvStatus.text = "⏳ Инициализация ELM327..."
-        scriptStartTime = System.currentTimeMillis()
-        scriptTimer = startTimer()
+        appendStatus("⏳ Диагностика...")
+        dynamicSamples = null
         registerScriptReceiver()
+        setActionState(State.DIAG)
     }
 
-    // ── Сканирование ошибок ────────────────────────────────
+    private fun startDynamicRecording() {
+        val dev = elmDevice ?: run { appendStatus("\n❌ ELM не найден"); return }
+        appendStatus("\n\n⏱ ТЕСТ")
+        appendStatus("\n⚠️ Газ до ~3000 об/мин, 3-4 сек, резко сбросьте.")
+        appendStatus("\n⚠️ Нажмите СТОП после завершения.")
+        setActionState(State.START)
 
-    private var dtcCodes = listOf<String>()
-    private var dtcChecked = false
+        thread(name = "DynamicTest", isDaemon = true) {
+            try {
+                val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script?mode=dynamic", "")
+                val scriptJson = client.downloadScript()
+                val script = org.json.JSONObject(scriptJson)
+                val stepsArr = script.getJSONArray("steps")
+                val interval = script.optLong("interval_ms", 250)
+                val steps = (0 until stepsArr.length()).map {
+                    val s = stepsArr.getJSONObject(it)
+                    ru.elmer.client.script.DynamicCollector.ElmStep(s.getString("id"), s.getString("cmd"), s.getString("desc"))
+                }
+                val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
+                if (!checker.isConnected()) { checker.ensureConnected() }
+                val elmProto = checker.getElm() ?: run { ui { appendStatus("\n❌ Нет связи с ELM") }; return@thread }
 
-    private fun scanDtc() {
-        val dev = findElmDevice() ?: return
-        appendStatus("\n─── Сканирование ошибок ───")
-        tvDtcStatus.visibility = android.view.View.GONE
-        val timer = startTimer()
-        val t0 = System.currentTimeMillis()
-        thread(name = "DtcScan", isDaemon = true) {
-            val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
-            val r = checker.scanDtc()
-            timer.set(false)
-            val elapsed = (System.currentTimeMillis() - t0) / 1000
-            runOnUiThread {
-                if (r == null) {
-                    appendStatus("\n❌ ELM не отвечает [${elapsed}с]")
-                    appendStatus("\nЛог: ${checker.getLog()}")
-                } else {
-                    dtcCodes = r
-                    dtcChecked = true
-                    if (r.isEmpty()) {
-                        appendStatus("\n✅ Ошибок нет [${elapsed}с]")
-                    } else {
-                        appendStatus("\n⚠️ Обнаружены ошибки (${r.size}): ${r.joinToString(", ")} [${elapsed}с]")
+                val timer = startTimer()
+                val collector = ru.elmer.client.script.DynamicCollector(elmProto, steps, interval,
+                    onSample = { idx -> ui { updateLastLine("📊 ${idx + 1} отсчётов") } },
+                    onLog = { })
+                dynamicCollector = collector
+                collector.start()
+
+                while (state == State.START && collector.isRunning()) Thread.sleep(200)
+                val samples = collector.stop()
+                timer.set(false)
+                dynamicSamples = samples.toMutableList()
+                ui { appendStatus("\n📊 Записано: ${samples.size} отсчётов") }
+                ui { appendStatus("\nНажмите ➤ для отправки на сервер.") }
+            } catch (e: Exception) {
+                ui { appendStatus("\n❌ ${e.message}") }
+            }
+        }
+    }
+
+    private fun stopDynamicRecording() {
+        state = State.STOP
+        appendStatus("\n⏹ Запись завершена")
+        setActionState(State.DIAG)
+    }
+
+    // ── Отправка ➤ ──────────────────────────────────────
+
+    private fun onSend() {
+        val text = etUserInput.text.toString().trim()
+        if (text.isEmpty() && dynamicSamples == null) return
+
+        if (dynamicSamples != null && dynamicSamples!!.isNotEmpty()) {
+            // Отправка данных теста
+            appendStatus("\n📤 Отправка данных теста...")
+            thread(name = "Upload", isDaemon = true) {
+                try {
+                    val db = SessionDb(this@MainActivity)
+                    val sid = db.createSession("{}", "Тест", "https://obdai.ru")
+                    val samples = dynamicSamples!!
+                    samples.forEachIndexed { i, batch ->
+                        batch.forEach { r -> db.addResponse(sid, "sample_$i", r.cmd, r.raw, r.decoded) }
                     }
-                    btnScript.isEnabled = true
-                    tvDtcStatus.text = "✅ Ошибки считаны — можно диагностировать"
-                    tvDtcStatus.setTextColor(0xFF4CAF50.toInt())
-                    tvDtcStatus.visibility = android.view.View.VISIBLE
+                    val responses = db.getResponses(sid)
+                    val clientInfo = mapOf("phone_model" to Build.MODEL, "app_version" to (packageManager.getPackageInfo(packageName, 0).versionName ?: "?"))
+                    val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
+                    val dynForUpload = samples.map { batch -> batch.map { r -> mapOf("step_id" to r.stepId, "cmd" to r.cmd, "raw" to r.raw, "decoded" to r.decoded) } }
+                    val resp = client.uploadSession(sid, responses, clientInfo, text, dynForUpload)
+                    dynamicSamples = null
+                    if (resp != null) {
+                        db.markUploaded(sid)
+                        val d = resp.optString("diagnosis", "")
+                        if (d.isNotEmpty()) ui { appendStatus("\n🩺 $d") }
+                    } else {
+                        ui { appendStatus("\n⚠️ Сервер недоступен") }
+                    }
+                } catch (e: Exception) {
+                    ui { appendStatus("\n❌ ${e.message}") }
+                }
+            }
+        } else if (text.isNotEmpty()) {
+            // Отправка текста в чат
+            chatHistory.add("user" to text)
+            appendStatus("\n👤 $text")
+            etUserInput.text.clear()
+            thread(name = "Chat", isDaemon = true) {
+                try {
+                    val json = org.json.JSONObject().apply {
+                        put("question", text)
+                        put("history", org.json.JSONArray().apply {
+                            for ((role, msg) in chatHistory) put(org.json.JSONObject().apply { put("role", role); put("content", msg) })
+                        })
+                    }
+                    val req = java.net.URL("https://obdai.ru/api/v1/chat").openConnection() as java.net.HttpURLConnection
+                    req.connectTimeout = 10000; req.readTimeout = 60000; req.doOutput = true
+                    req.setRequestProperty("Content-Type", "application/json")
+                    req.outputStream.write(json.toString().toByteArray())
+                    val body = if (req.responseCode == 200) req.inputStream.bufferedReader().readText() else ""
+                    req.disconnect()
+                    val answer = try { org.json.JSONObject(body).optString("answer", "(пусто)") } catch (_: Exception) { body.take(200) }
+                    runOnUiThread { chatHistory.add("assistant" to answer); appendStatus("\n🤖 $answer") }
+                } catch (e: Exception) {
+                    runOnUiThread { appendStatus("\n❌ ${e.message}") }
                 }
             }
         }
     }
 
-    private fun checkElm() {
-        val dev = findElmDevice() ?: return
-        appendStatus("\n─── Опрос ELM327 ───")
-        val timer = startTimer()
-        val t0 = System.currentTimeMillis()
-        thread(name = "ElmCheck", isDaemon = true) {
-            val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
-            val r = checker.checkDevice()
-            timer.set(false)
-            val elapsed = (System.currentTimeMillis() - t0) / 1000
-            runOnUiThread {
-                if (r == null) {
-                    appendStatus("\n❌ ELM не отвечает [${elapsed}с]")
-                    appendStatus("\nЛог: ${checker.getLog()}")
-                } else {
-                    elmChecker = checker  // сохраняем для ЭБУ
-                    val deviceLine = if (r.deviceId != "—") "\n🔹 Устройство: ${r.deviceId}" else ""
-                    val good = r.hasAdaptive && r.version.contains("v2")
-                    val result = if (good) {
-                        "\n✅ Чёткое устройство! [${elapsed}с]" +
-                        "${deviceLine}" +
-                        "\n🔹 Версия: ${r.version}" +
-                        "\n🔹 Протокол: ${r.protocol}" +
-                        "\n🔹 Напряжение: ${r.voltage}" +
-                        "\n🔹 Адаптивный тайминг: ✅"
-                    } else {
-                        "\n⚠️ Клон или слабый ELM327 [${elapsed}с]" +
-                        "${deviceLine}" +
-                        "\n🔹 Версия: ${r.version}" +
-                        "\n🔹 Протокол: ${r.protocol}" +
-                        "\n🔹 Адаптивный тайминг: ❌"
+    // ── История ──────────────────────────────────────────
+
+    private fun showHistory() {
+        val db = SessionDb(this)
+        val sessions = db.getSessions()
+        if (sessions.isEmpty()) { appendStatus("\n📋 История пуста"); return }
+        val recent = sessions.take(20)
+        val items = recent.map { s ->
+            val dt = s["created_at"]?.let { java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(it.toLong() * 1000)) } ?: "?"
+            val title = s["title"] ?: "Диагностика"
+            val prefix = if (s["uploaded"] == "1") "✅" else "⏳"
+            "$prefix [$dt] $title"
+        }.toTypedArray()
+        val diagnoses = recent.map { s -> s["diagnosis"] ?: "(нет данных)" }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("📋 История (${recent.size})")
+            .setItems(items) { _, which ->
+                val d = diagnoses[which]; val title = items[which]
+                androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle(title).setMessage(if (d.length > 500) d.take(500) + "…" else d)
+                    .setPositiveButton("📤 Поделиться") { _, _ ->
+                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"; putExtra(android.content.Intent.EXTRA_SUBJECT, "elmAI: $title")
+                            putExtra(android.content.Intent.EXTRA_TEXT, "elmAI диагностика\n$title\n\n$d")
+                        }
+                        startActivity(android.content.Intent.createChooser(intent, "Поделиться"))
                     }
-                    appendStatus(result)
-                }
+                    .setNegativeButton("Закрыть", null).show()
             }
-        }
+            .setNegativeButton("Закрыть", null).show()
     }
 
-    private fun checkEcu() {
-        val checker = elmChecker
-        if (checker == null) {
-            appendStatus("\n⚠️ Сначала нажми \"🔌 ELM\"")
-            return
-        }
-        appendStatus("\n─── Опрос ЭБУ ───")
-        val timer = startTimer()
-        val t0 = System.currentTimeMillis()
-        thread(name = "EcuCheck", isDaemon = true) {
-            val r = checker.checkEcu()
-            timer.set(false)
-            val elapsed = (System.currentTimeMillis() - t0) / 1000
-            runOnUiThread {
-                val obd = if (r.supportsObd) "✅" else "❌"
-                appendStatus("\n🚗 ЭБУ: OBD $obd, PID: ${r.pidMask} [${elapsed}с]" +
-                    if (r.vin != null) "\n🔹 VIN: ${r.vin}" else "\n🔹 VIN: не определился")
-            }
-        }
-    }
+    // ── Помощники ────────────────────────────────────────
 
     private fun findElmDevice(): BluetoothDevice? {
-        if (btAdapter == null) { appendStatus("\n❌ BT не поддерживается"); return null }
-        if (!btAdapter!!.isEnabled) { appendStatus("\n❌ Включите Bluetooth"); return null }
+        if (btAdapter == null || !btAdapter!!.isEnabled) return null
         val paired = btAdapter!!.bondedDevices.toList()
-        if (paired.isEmpty()) { appendStatus("\n❌ Нет спаренных устройств"); return null }
-        if (paired.size == 1) return paired[0]
-        // Более одного — показываем диалог выбора
-        showDevicePicker(paired)
-        return null  // диалог асинхронный, вернём через колбэк
-    }
-
-    private fun showDevicePicker(devices: List<BluetoothDevice>) {
-        val names = devices.map { "${it.name}\n${it.address}" }.toTypedArray()
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Выберите устройство (${devices.size})")
-            .setItems(names) { _, which ->
-                elmDevice = devices[which]
-                appendStatus("\n✅ Выбран: ${devices[which].name}")
+        return if (paired.size == 1) paired[0] else {
+            if (paired.size > 1) {
+                val names = paired.map { "${it.name}\n${it.address}" }.toTypedArray()
+                runOnUiThread {
+                    androidx.appcompat.app.AlertDialog.Builder(this)
+                        .setTitle("Выберите устройство").setItems(names) { _, which -> elmDevice = paired[which] }
+                        .setNegativeButton("Отмена", null).show()
+                }
             }
-            .setNegativeButton("Отмена", null)
-            .show()
+            null
+        }
     }
 
-    /** Запускает общий таймер в tv_timer. Возвращает флаг для остановки. */
     private fun startTimer(): java.util.concurrent.atomic.AtomicBoolean {
         val running = java.util.concurrent.atomic.AtomicBoolean(true)
         val tvTimer = findViewById<TextView>(R.id.tv_timer)
-        runOnUiThread { tvTimer.visibility = android.view.View.VISIBLE }
+        runOnUiThread { tvTimer.visibility = View.VISIBLE }
         thread(name = "Timer", isDaemon = true) {
             var sec = 0
-            while (running.get()) {
-                Thread.sleep(1000)
-                sec++
-                runOnUiThread {
-                    if (running.get()) tvTimer.text = "⏱ ${sec}с"
-                }
-            }
-            runOnUiThread { tvTimer.visibility = android.view.View.GONE }
+            while (running.get()) { Thread.sleep(1000); sec++; runOnUiThread { if (running.get()) tvTimer.text = "⏱ ${sec}с" } }
+            runOnUiThread { tvTimer.visibility = View.GONE }
         }
         return running
     }
 
+    private fun appendStatus(text: String) {
+        tvStatus.append(text)
+        scrollOutput.post { scrollOutput.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private fun updateLastLine(text: String) {
+        val current = tvStatus.text.toString()
+        val lastNewline = current.lastIndexOf('\n')
+        if (lastNewline >= 0) tvStatus.text = current.substring(0, lastNewline + 1) + text
+    }
+
+    private fun ui(block: () -> Unit) { runOnUiThread(block) }
+
+    // ── ScriptReceiver ───────────────────────────────────
+
     private fun registerScriptReceiver() {
         if (scriptRegistered) return
         scriptRegistered = true
-        registerReceiver(scriptStatusReceiver,
-            IntentFilter(ScriptRunnerService.BROADCAST_STATUS),
-            ContextCompat.RECEIVER_NOT_EXPORTED)
-        registerReceiver(scriptStageReceiver,
-            IntentFilter(ScriptRunnerService.BROADCAST_STAGE),
-            ContextCompat.RECEIVER_NOT_EXPORTED)
+        registerReceiver(scriptStatusReceiver, IntentFilter(ScriptRunnerService.BROADCAST_STATUS), ContextCompat.RECEIVER_NOT_EXPORTED)
+        registerReceiver(scriptStageReceiver, IntentFilter(ScriptRunnerService.BROADCAST_STAGE), ContextCompat.RECEIVER_NOT_EXPORTED)
     }
-
-    private var scriptStartTime: Long = 0
-    private var scriptTimer: java.util.concurrent.atomic.AtomicBoolean? = null
 
     private val scriptStageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val stage = intent?.getStringExtra("stage") ?: return
             val detail = intent.getStringExtra("detail") ?: ""
-            val elapsed = if (scriptStartTime > 0)
-                " [${(System.currentTimeMillis() - scriptStartTime) / 1000}с]"
-            else ""
             when (stage) {
-                "ecu" -> appendStatus("\n🔌 Соединение с ЭБУ...$elapsed")
-                "upload" -> appendStatus("\n📤 $detail$elapsed")
-                "llm" -> appendStatus("\n🧠 $detail$elapsed")
-                "done" -> {
-                    scriptTimer?.set(false)
-                    appendStatus("\n$detail$elapsed")
-                    btnClose.visibility = android.view.View.VISIBLE
-                    btnSend.visibility = android.view.View.VISIBLE
-                    btnDynIdle.visibility = android.view.View.VISIBLE
-                    btnDynDrive.visibility = android.view.View.VISIBLE
-                    // Скрыть верхние кнопки для максимизации вывода
-                    btnDtc.visibility = android.view.View.GONE
-                    btnScript.visibility = android.view.View.GONE
-                    btnTest.visibility = android.view.View.GONE
-                    btnCheckElm.visibility = android.view.View.GONE
-                    btnCheckEcu.visibility = android.view.View.GONE
-                    btnHistory.visibility = android.view.View.GONE
-                    cbFullMode.visibility = android.view.View.GONE
-                    tvDtcStatus.visibility = android.view.View.GONE
-                }
-                else -> appendStatus("\n📡 $detail$elapsed")
+                "done" -> { appendStatus("\n$detail"); setActionState(State.DIAG) }
+                else -> appendStatus("\n$detail")
             }
         }
     }
@@ -446,216 +465,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         try { unregisterReceiver(scriptStatusReceiver) } catch (_: Exception) {}
         try { unregisterReceiver(scriptStageReceiver) } catch (_: Exception) {}
-        scriptRegistered = false  // сброс для перерегистрации после поворота
+        scriptRegistered = false
         super.onDestroy()
-    }
-
-    // ── Помощники ───────────────────────────────────────
-
-    private fun appendStatus(text: String) {
-        tvStatus.append(text)
-        scrollOutput.post { scrollOutput.fullScroll(android.view.View.FOCUS_DOWN) }
-    }
-
-    // ── Чат с LLM ────────────────────────────────────────
-
-    private fun sendToLlm() {
-        val text = etUserInput.text.toString().trim()
-        if (text.isEmpty()) return
-        etUserInput.text.clear()
-        chatHistory.add("user" to text)
-        appendStatus("\n👤 $text")
-        thread(name = "LlmChat", isDaemon = true) {
-            try {
-                val json = org.json.JSONObject().apply {
-                    put("question", text)
-                    put("history", org.json.JSONArray().apply {
-                        for ((role, msg) in chatHistory) {
-                            put(org.json.JSONObject().apply {
-                                put("role", role); put("content", msg)
-                            })
-                        }
-                    })
-                }
-                val req = java.net.URL("https://obdai.ru/api/v1/chat").openConnection() as java.net.HttpURLConnection
-                req.connectTimeout = 10000; req.readTimeout = 60000
-                req.doOutput = true; req.setRequestProperty("Content-Type", "application/json")
-                addApiKey(req)
-                req.outputStream.write(json.toString().toByteArray())
-                val body = if (req.responseCode == 200)
-                    req.inputStream.bufferedReader().readText() else ""
-                req.disconnect()
-                val answer = try {
-                    org.json.JSONObject(body).optString("answer", "(пусто)")
-                } catch (_: Exception) { body.take(200) }
-                runOnUiThread {
-                    chatHistory.add("assistant" to answer)
-                    appendStatus("\n🤖 $answer")
-                }
-            } catch (e: Exception) {
-                runOnUiThread { appendStatus("\n❌ ${e.message}") }
-            }
-        }
-    }
-
-    // ── Динамический тест ────────────────────────────────
-
-    private var dynamicCollector: ru.elmer.client.script.DynamicCollector? = null
-    private var dynamicSamples: MutableList<List<ru.elmer.client.script.DynamicCollector.SampleResponse>>? = null
-
-    private fun startDynamicTest(mode: String) {
-        if (btAdapter == null) { appendStatus("\n❌ Bluetooth не поддерживается"); return }
-        // Защита от двойного нажатия
-        if (dynamicCollector?.isRunning() == true) { appendStatus("\n⚠️ Тест уже идёт"); return }
-        val dev = elmDevice ?: findElmDevice() ?: return
-        elmDevice = dev
-        val isDrive = mode == "drive"
-        val label = if (isDrive) "🚗 В движении" else "⏱ На месте"
-
-        // Подсказка
-        if (isDrive) {
-            appendStatus("\n\n🚗 ТЕСТ В ДВИЖЕНИИ")
-            appendStatus("\n⚠️ Остановитесь. Нажмите СТАРТ ДО начала движения.")
-            appendStatus("\n⚠️ Ничего не нажимайте в движении — программа пишет сама.")
-            appendStatus("\n⚠️ После полной остановки нажмите СТОП.")
-        } else {
-            appendStatus("\n\n⏱ ТЕСТ НА МЕСТЕ")
-            appendStatus("\n⚠️ Нажмите СТАРТ, затем нажмите педаль газа.")
-            appendStatus("\n⚠️ Поднимите до ~3000 об/мин, держите 3-4 сек, резко сбросьте.")
-            appendStatus("\n⚠️ Нажмите СТОП после завершения.")
-        }
-
-        // Показываем кнопку СТАРТ
-        btnDynIdle.visibility = android.view.View.GONE
-        btnDynDrive.visibility = android.view.View.GONE
-        btnDynStart.text = "▶ СТАРТ $label"
-        btnDynStart.setBackgroundColor(0xFF4CAF50.toInt())
-        btnDynStart.visibility = android.view.View.VISIBLE
-
-        var started = false
-
-        btnDynStart.setOnClickListener(null)
-        btnDynStart.setOnClickListener {
-            if (!started) {
-                // СТАРТ
-                started = true
-                btnDynStart.text = "⏹ СТОП $label"
-                btnDynStart.setBackgroundColor(0xFFd32f2f.toInt())
-                appendStatus("\n▶ Запись началась...")
-
-                thread(name = "DynamicTest", isDaemon = true) {
-                    try {
-                        val client = ru.elmer.client.server.ServerClient(
-                            "https://obdai.ru",
-                            "https://obdai.ru/api/v1/script?mode=dynamic",
-                            ""
-                        )
-                        val scriptJson = client.downloadScript()
-                        val script = org.json.JSONObject(scriptJson)
-                        val stepsArr = script.getJSONArray("steps")
-                        val interval = script.optLong("interval_ms", 250)
-                        val steps = (0 until stepsArr.length()).map {
-                            val s = stepsArr.getJSONObject(it)
-                            ru.elmer.client.script.DynamicCollector.ElmStep(
-                                s.getString("id"), s.getString("cmd"), s.getString("desc")
-                            )
-                        }
-
-                        val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
-                        if (!checker.isConnected()) {
-                            ui { appendStatus("\n⏳ Подключение к ELM...") }
-                            if (!checker.ensureConnected()) {
-                                ui { appendStatus("\n❌ Не удалось подключиться") }
-                                checker.close()
-                                return@thread
-                            }
-                        }
-                        val elmProto = checker.getElm()
-                            ?: run { ui { appendStatus("\n❌ Нет связи с ELM") }; return@thread }
-
-                        val timer = startTimer()
-                        val collector = ru.elmer.client.script.DynamicCollector(
-                            elm = elmProto, steps = steps, intervalMs = interval,
-                            onSample = { idx -> ui {
-                                // Обновляем последнюю строку вывода
-                                val current = tvStatus.text.toString()
-                                val lastNewline = current.lastIndexOf('\n')
-                                if (lastNewline >= 0) {
-                                    tvStatus.text = current.substring(0, lastNewline + 1) + "📊 ${idx + 1} отсчётов"
-                                }
-                                scrollOutput.post { scrollOutput.fullScroll(android.view.View.FOCUS_DOWN) }
-                            }},
-                            onLog = { }
-                        )
-                        dynamicCollector = collector
-                        collector.start()
-
-                        while (started && collector.isRunning()) Thread.sleep(200)
-                        val samples = collector.stop()
-                        timer.set(false)
-
-                        dynamicSamples = samples.toMutableList()
-                        ui { appendStatus("\n📊 Записано: ${samples.size} отсчётов") }
-                    } catch (e: Exception) {
-                        ui { appendStatus("\n❌ ${e.message}") }
-                    }
-                }
-            } else {
-                // СТОП
-                started = false
-                appendStatus("\n⏹ Запись завершена")
-                btnDynStart.visibility = android.view.View.GONE
-                btnDynIdle.visibility = android.view.View.VISIBLE
-                btnDynDrive.visibility = android.view.View.VISIBLE
-            }
-        }
-    }
-
-    private fun showHistory() {
-        val db = SessionDb(this)
-        val sessions = db.getSessions()
-        if (sessions.isEmpty()) {
-            appendStatus("\n📋 История пуста")
-            return
-        }
-
-        // Берём последние 20, формируем список
-        val recent = sessions.take(20)
-        val items = recent.map { s ->
-            val dt = s["created_at"]?.let {
-                java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.getDefault())
-                    .format(java.util.Date(it.toLong() * 1000))
-            } ?: "?"
-            val title = s["title"] ?: "Диагностика"
-            val uploaded = s["uploaded"] == "1"
-            val prefix = if (uploaded) "✅" else "⏳"
-            "$prefix [$dt] $title"
-        }.toTypedArray()
-
-        val diagnoses = recent.map { s -> s["diagnosis"] ?: "(нет данных)" }
-
-        // Сначала показываем список
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("📋 История (${recent.size})")
-            .setItems(items) { _, which ->
-                // Показать диагноз с кнопкой Поделиться
-                val d = diagnoses[which]
-                val title = items[which]
-                androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
-                    .setTitle(title)
-                    .setMessage(if (d.length > 500) d.take(500) + "…" else d)
-                    .setPositiveButton("📤 Поделиться") { _, _ ->
-                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(android.content.Intent.EXTRA_SUBJECT, "elmAI: $title")
-                            putExtra(android.content.Intent.EXTRA_TEXT, "elmAI диагностика\n$title\n\n$d")
-                        }
-                        startActivity(android.content.Intent.createChooser(intent, "Поделиться"))
-                    }
-                    .setNegativeButton("Закрыть", null)
-                    .show()
-            }
-            .setNegativeButton("Закрыть", null)
-            .show()
     }
 }
