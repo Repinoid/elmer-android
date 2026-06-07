@@ -110,6 +110,8 @@ class ScriptRunnerService : Service() {
     }
 
     private fun startRun(intent: Intent) {
+        if (running) { log("⚠️ Уже запущен"); return }
+        running = true
         scriptUrl = intent.getStringExtra(EXTRA_SCRIPT_URL)
             ?: intent.getStringExtra(EXTRA_SERVER_URL)?.let { "$it/api/v1/script" }
             ?: "https://obdai.ru/api/v1/script"
