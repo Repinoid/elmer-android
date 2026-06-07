@@ -126,6 +126,7 @@ class MainActivity : AppCompatActivity() {
             appendStatus("\nГотов")
             btnClose.visibility = android.view.View.GONE
             btnSend.visibility = android.view.View.GONE
+            dynamicButtons.visibility = android.view.View.GONE
             // Вернуть кнопки
             findViewById<LinearLayout>(R.id.top_buttons).visibility = android.view.View.VISIBLE
             findViewById<LinearLayout>(R.id.check_section).visibility = android.view.View.VISIBLE
@@ -458,6 +459,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun startDynamicTest(mode: String) {
         val dev = elmDevice ?: findElmDevice() ?: return
+        elmDevice = dev
         val isDrive = mode == "drive"
         val label = if (isDrive) "🚗 В движении" else "⏱ На месте"
 
