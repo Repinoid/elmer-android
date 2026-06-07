@@ -284,6 +284,7 @@ class MainActivity : AppCompatActivity() {
         setActionState(State.START)
 
         thread(name = "DynamicTest", isDaemon = true) {
+            var timer: java.util.concurrent.atomic.AtomicBoolean? = null
             try {
                 val checker = elmChecker
                 if (checker == null) {
@@ -300,8 +301,6 @@ class MainActivity : AppCompatActivity() {
                     "0110" to "pid_10", "0111" to "pid_11", "011F" to "pid_1F"
                 ).map { ru.elmer.client.script.DynamicCollector.ElmStep(it.second, it.first, it.second) }
                 val interval = 250L
-
-                var timer: java.util.concurrent.atomic.AtomicBoolean? = null
 
                 timer = startTimer()
                 val collector = ru.elmer.client.script.DynamicCollector(elmProto, steps, interval,
