@@ -24,6 +24,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var btnConnect: Button
     private lateinit var tvStatus: TextView
+    private lateinit var tvTimer: TextView
     private lateinit var etUrl: EditText
 
     private val btAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
@@ -41,12 +42,28 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private val timerReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val elapsed = intent?.getLongExtra("elapsed", -1) ?: -1
+            runOnUiThread {
+                if (elapsed < 0) {
+                    tvTimer.text = ""
+                } else {
+                    val min = elapsed / 60
+                    val sec = elapsed % 60
+                    tvTimer.text = "⏱ ${min}:${sec.toString().padStart(2, '0')}"
+                }
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         btnConnect = findViewById(R.id.btn_connect)
         tvStatus = findViewById(R.id.tv_status)
+        tvTimer = findViewById(R.id.tv_timer)
         etUrl = findViewById(R.id.et_server_url)
 
         // Версия из build.gradle (versionName)
@@ -58,6 +75,8 @@ class MainActivity : AppCompatActivity() {
         etUrl.setText("10.47.183.102:35000")
 
         registerReceiver(statusReceiver, IntentFilter(ElmForwardService.BROADCAST_STATUS),
+            ContextCompat.RECEIVER_NOT_EXPORTED)
+        registerReceiver(timerReceiver, IntentFilter(ElmForwardService.BROADCAST_TIMER),
             ContextCompat.RECEIVER_NOT_EXPORTED)
 
         btnConnect.setOnClickListener { startDiagnostics() }
@@ -163,6 +182,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         unregisterReceiver(statusReceiver)
+        unregisterReceiver(timerReceiver)
         super.onDestroy()
     }
 }

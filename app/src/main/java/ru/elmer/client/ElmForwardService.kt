@@ -41,6 +41,8 @@ class ElmForwardService : Service() {
     private var serverUrl = "https://obdai.ru/api/v1/raw-obd"
     private var sessionId: String? = null  // сохраняем ID сессии от сервера
     private var running = false
+    private var timerStart = 0L
+    private var timerRunning = false
 
     companion object {
         const val TAG = "ElmRelay"
@@ -52,6 +54,7 @@ class ElmForwardService : Service() {
         const val EXTRA_SERVER_URL = "server_url"
         const val EXTRA_DEBUG_HOST = "debug_host"
         const val BROADCAST_STATUS = "ru.elmer.client.STATUS"
+        const val BROADCAST_TIMER = "ru.elmer.client.TIMER"
     }
 
     override fun onCreate() {
@@ -87,6 +90,8 @@ class ElmForwardService : Service() {
     }
 
     private fun btConnect(mac: String) {
+        timerStart = System.currentTimeMillis()
+        startTimer()
         say("BT: $mac...")
         say("🌐 Server: $serverUrl")
         try {
@@ -100,10 +105,12 @@ class ElmForwardService : Service() {
             say("BT: OK")
             fwd("READY")  // кикстарт сервера
             loop()
-        } catch (e: Exception) { say("BT err: ${e.message}") }
+        } catch (e: Exception) { say("BT err: ${e.message}"); stopTimer() }
     }
 
     private fun tcpConnect(host: String, port: Int) {
+        timerStart = System.currentTimeMillis()
+        startTimer()
         say("TCP: $host:$port...")
         say("🌐 Server: $serverUrl")
         try {
@@ -113,7 +120,7 @@ class ElmForwardService : Service() {
             say("TCP: OK")
             fwd("READY")  // кикстарт сервера
             loop()
-        } catch (e: Exception) { say("TCP err: ${e.message}") }
+        } catch (e: Exception) { say("TCP err: ${e.message}"); stopTimer() }
     }
 
     private fun loop() {
@@ -204,6 +211,7 @@ class ElmForwardService : Service() {
 
     private fun disconnect() {
         running = false
+        stopTimer()
         try { btSocket?.close() } catch (_: Exception) {}
         try { tcpSocket?.close() } catch (_: Exception) {}
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -236,4 +244,30 @@ class ElmForwardService : Service() {
     }
 
     override fun onDestroy() { disconnect(); super.onDestroy() }
+
+    // ── Таймер ──────────────────────────────────
+
+    private fun startTimer() {
+        timerRunning = true
+        thread(name = "Timer", isDaemon = true) {
+            while (timerRunning) {
+                val elapsed = (System.currentTimeMillis() - timerStart) / 1000
+                val intent = Intent(BROADCAST_TIMER).apply {
+                    putExtra("elapsed", elapsed)
+                    setPackage(packageName)
+                }
+                sendBroadcast(intent)
+                Thread.sleep(500)
+            }
+            // Финальный сброс
+            sendBroadcast(Intent(BROADCAST_TIMER).apply {
+                putExtra("elapsed", -1)
+                setPackage(packageName)
+            })
+        }
+    }
+
+    private fun stopTimer() {
+        timerRunning = false
+    }
 }

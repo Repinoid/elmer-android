@@ -23,11 +23,14 @@ class TestService : Service() {
     private var btSocket: BluetoothSocket? = null
     private var inp: java.io.InputStream? = null
     private var out: java.io.OutputStream? = null
+    private var timerStart = 0L
+    private var timerRunning = false
 
     companion object {
         const val TAG = "ElmerTest"
         const val ACTION_RUN = "ru.elmer.client.TEST_RUN"
         const val BROADCAST_STATUS = "ru.elmer.client.TEST_STATUS"
+        const val BROADCAST_TIMER = "ru.elmer.client.TIMER"
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -51,6 +54,8 @@ class TestService : Service() {
     // ── TCP (mock ELM327) ─────────────────────────
 
     private fun runTestTcp(host: String, port: Int) {
+        timerStart = System.currentTimeMillis()
+        startTimer()
         header("TCP $host:$port")
         try {
             socket = Socket(host, port).also { it.soTimeout = 3000 }
@@ -59,7 +64,7 @@ class TestService : Service() {
             say("✅ TCP OK")
         } catch (e: Exception) {
             say("❌ TCP: ${e.message}")
-            stopSelf(); return
+            stopTimer(); stopSelf(); return
         }
         runProtocol()
     }
@@ -67,6 +72,8 @@ class TestService : Service() {
     // ── Bluetooth (реальный ELM327) ───────────────
 
     private fun runTestBt() {
+        timerStart = System.currentTimeMillis()
+        startTimer()
         header("Bluetooth")
 
         val adapter = BluetoothAdapter.getDefaultAdapter()
@@ -111,26 +118,26 @@ class TestService : Service() {
     private fun runProtocol() {
         say("─── ШАГ 1: Связь ───")
         say("→ ATZ")
-        if (!sendAndRead("ATZ")) { done("❌ ELM не отвечает"); return }
+        if (!sendAndRead("ATZ", 5000)) { done("❌ ELM не отвечает"); return }
 
         say("✅ СВЯЗЬ ЕСТЬ!")
         say("─── ШАГ 2: Инициализация ───")
-        for (cmd in listOf("ATE0", "ATL0", "ATSP0", "ATH1")) {
-            if (!sendAndRead(cmd)) { done("❌ Сбой на $cmd"); return }
+        for (cmd in listOf("ATE0", "ATL0", "ATS0", "ATH1", "ATSP0")) {
+            if (!sendAndRead(cmd, 500)) { done("❌ Сбой на $cmd"); return }
         }
 
         say("─── ШАГ 3: VIN ───")
-        if (!sendAndRead("0902")) { done("⚠️ VIN не прочитан"); }
+        if (!sendAndRead("0902", 2000)) { say("⚠️ VIN не прочитан") }
 
         say("─── ШАГ 4: Ошибки ───")
-        sendAndRead("03")  // stored
-        sendAndRead("07")  // pending
+        sendAndRead("03", 1000)  // stored
+        sendAndRead("07", 1000)  // pending
 
         say("─── ШАГ 5: Параметры ───")
         val pids = listOf("0105", "010C", "010D", "0111", "010B", "010F", "011F", "0104", "0106", "0107")
         for (pid in pids) {
-            sendAndRead(pid)
-            Thread.sleep(100)
+            sendAndRead(pid, 300)
+            Thread.sleep(50)  // минимальная пауза между PID
         }
 
         done("✅ ТЕСТ ПРОЙДЕН!")
@@ -213,32 +220,35 @@ class TestService : Service() {
 
     // ── Низкоуровневые ────────────────────────────
 
-    private fun sendAndRead(cmd: String): Boolean {
+    private fun sendAndRead(cmd: String, timeoutMs: Int = 500): Boolean {
         try {
-            out?.write((cmd + "\r\n").toByteArray())
+            out?.write((cmd + "\r").toByteArray())
             out?.flush()
         } catch (e: Exception) {
             say("❌ WRITE: ${e.message}")
             return false
         }
-        Thread.sleep(250)
-        val resp = readResponse()
+        val resp = readResponse(timeoutMs)
         say("← $resp")
         val decoded = decode(cmd, resp)
         if (decoded != resp.trim()) say("   → $decoded")
         return resp.isNotEmpty() && resp != "(timeout)"
     }
 
-    private fun readResponse(): String {
+    private fun readResponse(timeoutMs: Int = 500): String {
         val sb = StringBuilder()
         try {
-            val deadline = System.currentTimeMillis() + 4000
+            val deadline = System.currentTimeMillis() + timeoutMs
             while (System.currentTimeMillis() < deadline) {
-                val b = inp?.read() ?: -1
-                if (b == -1) break
-                val c = b.toChar()
-                if (c == '>') break
-                if (c != '\r' && c != '\n') sb.append(c)
+                if (inp?.available() ?: 0 > 0) {
+                    val b = inp?.read() ?: -1
+                    if (b == -1) break
+                    val c = b.toChar()
+                    if (c == '>') break
+                    if (c != '\r' && c != '\n') sb.append(c)
+                } else {
+                    Thread.sleep(5)  // поллинг 5мс вместо busy-loop
+                }
             }
         } catch (e: IOException) {
             if (sb.isEmpty()) sb.append("(timeout)")
@@ -254,6 +264,7 @@ class TestService : Service() {
     }
 
     private fun done(msg: String) {
+        stopTimer()
         say("══════════════════")
         say(msg)
         say("══════════════════")
@@ -273,4 +284,28 @@ class TestService : Service() {
     private fun disconnect() { try { socket?.close() } catch (_: Exception) {} }
     private fun disconnectBt() { try { btSocket?.close() } catch (_: Exception) {} }
     override fun onDestroy() { disconnect(); disconnectBt(); super.onDestroy() }
+
+    // ── Таймер ──────────────────────────────────
+
+    private fun startTimer() {
+        timerRunning = true
+        thread(name = "Timer", isDaemon = true) {
+            while (timerRunning) {
+                val elapsed = (System.currentTimeMillis() - timerStart) / 1000
+                sendBroadcast(Intent(BROADCAST_TIMER).apply {
+                    putExtra("elapsed", elapsed)
+                    setPackage(packageName)
+                })
+                Thread.sleep(500)
+            }
+            sendBroadcast(Intent(BROADCAST_TIMER).apply {
+                putExtra("elapsed", -1)
+                setPackage(packageName)
+            })
+        }
+    }
+
+    private fun stopTimer() {
+        timerRunning = false
+    }
 }
