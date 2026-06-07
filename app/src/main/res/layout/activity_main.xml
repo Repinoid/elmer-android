@@ -17,14 +17,33 @@
         android:layout_marginTop="16dp"
         android:layout_marginBottom="2dp" />
 
-    <TextView
-        android:id="@+id/tv_version"
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="v?"
-        android:textSize="10sp"
-        android:textColor="#555"
-        android:layout_marginBottom="8dp" />
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:id="@+id/tv_version"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="v?"
+            android:textSize="10sp"
+            android:textColor="#555" />
+
+        <TextView
+            android:id="@+id/tv_timer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="12sp"
+            android:textColor="#ff6b35"
+            android:fontFamily="monospace"
+            android:visibility="gone" />
+
+    </LinearLayout>
 
     <!-- Главные кнопки: Ошибки + Диагностика -->
     <LinearLayout

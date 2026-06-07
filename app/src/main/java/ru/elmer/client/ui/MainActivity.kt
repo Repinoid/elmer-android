@@ -208,6 +208,7 @@ class MainActivity : AppCompatActivity() {
         tvStatus.text = ""
         tvStatus.text = "⏳ Инициализация ELM327..."
         scriptStartTime = System.currentTimeMillis()
+        scriptTimer = startTimer()
         registerScriptReceiver()
     }
 
@@ -317,21 +318,21 @@ class MainActivity : AppCompatActivity() {
         return dev
     }
 
-    /** Запускает тикающий таймер в tv_version. Возвращает флаг для остановки. */
+    /** Запускает общий таймер в tv_timer. Возвращает флаг для остановки. */
     private fun startTimer(): java.util.concurrent.atomic.AtomicBoolean {
         val running = java.util.concurrent.atomic.AtomicBoolean(true)
-        val tvVer = findViewById<TextView>(R.id.tv_version)
-        val origText = tvVer.text.toString()
+        val tvTimer = findViewById<TextView>(R.id.tv_timer)
+        runOnUiThread { tvTimer.visibility = android.view.View.VISIBLE }
         thread(name = "Timer", isDaemon = true) {
             var sec = 0
             while (running.get()) {
                 Thread.sleep(1000)
                 sec++
                 runOnUiThread {
-                    if (running.get()) tvVer.text = "⏱ ${sec}с"
+                    if (running.get()) tvTimer.text = "⏱ ${sec}с"
                 }
             }
-            runOnUiThread { tvVer.text = origText }
+            runOnUiThread { tvTimer.visibility = android.view.View.GONE }
         }
         return running
     }
@@ -348,6 +349,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var scriptStartTime: Long = 0
+    private var scriptTimer: java.util.concurrent.atomic.AtomicBoolean? = null
 
     private val scriptStageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -361,6 +363,7 @@ class MainActivity : AppCompatActivity() {
                 "upload" -> appendStatus("\n📤 $detail$elapsed")
                 "llm" -> appendStatus("\n🧠 $detail$elapsed")
                 "done" -> {
+                    scriptTimer?.set(false)
                     appendStatus("\n$detail$elapsed")
                     btnClose.visibility = android.view.View.VISIBLE
                     btnSend.visibility = android.view.View.VISIBLE
