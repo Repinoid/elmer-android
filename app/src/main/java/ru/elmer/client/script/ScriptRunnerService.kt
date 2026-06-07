@@ -142,31 +142,15 @@ class ScriptRunnerService : Service() {
             errorDone("Bluetooth выключен")
             return
         }
-        val bonded = a.bondedDevices ?: emptyList()
+        val bonded = a.bondedDevices?.toList() ?: emptyList()
         if (bonded.isEmpty()) {
             log("❌ Нет спаренных Bluetooth-устройств")
             log("🔧 Сопрягите ELM327 в Настройки → Bluetooth.")
-            log("   Обычно имя: OBDII, ELM327, CBT, V-LINK.")
             errorDone("Нет спаренных устройств")
             return
         }
-        val dev = bonded.find {
-            it.name.uppercase().let { n -> n.contains("OBD") || n.contains("ELM") || n.contains("CBT") || n.contains("V-LINK") }
-        }
-        if (dev == null) {
-            log("❌ ELM327 не найден среди спаренных устройств (${bonded.size} шт.)")
-            log("   Имена устройств: ${bonded.joinToString { it.name }}")
-            log("")
-            log("🔧 Что проверить:")
-            log("  1. Вставлен ли адаптер в OBD-разъём?")
-            log("  2. Горит ли красная лампочка на ELM327?")
-            log("  3. Заведено ли зажигание?")
-            log("  4. Включён ли Bluetooth на телефоне?")
-            log("  5. Сопряжён ли ELM327 в Настройки → Bluetooth?")
-            log("  6. На некоторых авто OBD отключается при глушении.")
-            errorDone("ELM327 не найден")
-            return
-        }
+        // Берём первое спаренное устройство
+        val dev = bonded[0]
         elmMac = dev.address; elmBtName = dev.name
         log("   Найден: ${dev.name} (${dev.address})"); log("⏳ Подключение...")
         try {

@@ -345,11 +345,24 @@ class MainActivity : AppCompatActivity() {
     private fun findElmDevice(): BluetoothDevice? {
         if (btAdapter == null) { appendStatus("\n❌ BT не поддерживается"); return null }
         if (!btAdapter!!.isEnabled) { appendStatus("\n❌ Включите Bluetooth"); return null }
-        val paired = btAdapter!!.bondedDevices
-        val names = paired.map { it.name }.joinToString(", ")
-        val dev = paired.find { it.name.uppercase().let { n -> n.contains("OBD") || n.contains("ELM") || n.contains("CBT") || n.contains("V-LINK") || n.contains("VLINK") || n.contains("ANDROID-VLINK") || n.contains("BTSCAN") || n.contains("CARBT") || n.contains("AUTO") } }
-        if (dev == null) appendStatus("\n❌ ELM не найден\nСопряжено: ${paired.size} шт.\nИмена: $names")
-        return dev
+        val paired = btAdapter!!.bondedDevices.toList()
+        if (paired.isEmpty()) { appendStatus("\n❌ Нет спаренных устройств"); return null }
+        if (paired.size == 1) return paired[0]
+        // Более одного — показываем диалог выбора
+        showDevicePicker(paired)
+        return null  // диалог асинхронный, вернём через колбэк
+    }
+
+    private fun showDevicePicker(devices: List<BluetoothDevice>) {
+        val names = devices.map { "${it.name}\n${it.address}" }.toTypedArray()
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Выберите устройство (${devices.size})")
+            .setItems(names) { _, which ->
+                elmDevice = devices[which]
+                appendStatus("\n✅ Выбран: ${devices[which].name}")
+            }
+            .setNegativeButton("Отмена", null)
+            .show()
     }
 
     /** Запускает общий таймер в tv_timer. Возвращает флаг для остановки. */
