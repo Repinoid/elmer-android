@@ -611,16 +611,26 @@ class MainActivity : AppCompatActivity() {
 
         val diagnoses = recent.map { s -> s["diagnosis"] ?: "(нет данных)" }
 
+        // Сначала показываем список
         androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle("📋 История (${recent.size})")
             .setItems(items) { _, which ->
-                // Показать полный диагноз
-                appendStatus("\n📋 ${items[which]}\n\n${diagnoses[which]}")
-                btnClose.setOnClickListener {
-                    btnClose.visibility = android.view.View.GONE
-                    showHistory()
-                }
-                btnClose.visibility = android.view.View.VISIBLE
+                // Показать диагноз с кнопкой Поделиться
+                val d = diagnoses[which]
+                val title = items[which]
+                androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle(title)
+                    .setMessage(if (d.length > 500) d.take(500) + "…" else d)
+                    .setPositiveButton("📤 Поделиться") { _, _ ->
+                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_SUBJECT, "elmAI: $title")
+                            putExtra(android.content.Intent.EXTRA_TEXT, "elmAI диагностика\n$title\n\n$d")
+                        }
+                        startActivity(android.content.Intent.createChooser(intent, "Поделиться"))
+                    }
+                    .setNegativeButton("Закрыть", null)
+                    .show()
             }
             .setNegativeButton("Закрыть", null)
             .show()
