@@ -597,6 +597,8 @@ class MainActivity : AppCompatActivity() {
                 appendStatus("\n⏹ Запись завершена")
                 btnScript.visibility = android.view.View.GONE
                 dynamicButtons.visibility = android.view.View.VISIBLE
+                // Вернуть кнопки Диагностика и Ошибки
+                findViewById<LinearLayout>(R.id.top_buttons).visibility = android.view.View.VISIBLE
             }
         }
     }

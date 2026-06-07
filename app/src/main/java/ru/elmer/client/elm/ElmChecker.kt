@@ -218,6 +218,8 @@ class ElmChecker(
 
         // На всякий случай закроем старый сокет, если он есть, но не connected
         try { socket?.close() } catch (_: Exception) {}
+        // Задержка — некоторые ELM долго просыпаются
+        Thread.sleep(800)
 
         try {
             val s = device.createRfcommSocketToServiceRecord(SPP_UUID)
