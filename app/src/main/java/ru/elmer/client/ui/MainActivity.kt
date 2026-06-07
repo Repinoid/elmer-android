@@ -109,7 +109,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateUiState() {
-        val elmOk = indElm.text.contains("🟢")
+        val elmOk = indElm.text.contains("🟢") && indEcu.text.contains("🟢")
         val llmOk = indLlm.text.contains("🟢")
         btnAction.isEnabled = elmOk
         btnAction.alpha = if (elmOk) 1.0f else 0.4f
