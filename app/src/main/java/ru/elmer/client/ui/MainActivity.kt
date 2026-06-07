@@ -229,9 +229,11 @@ class MainActivity : AppCompatActivity() {
                 } else if (r.isEmpty()) {
                     appendStatus("\n✅ Ошибок нет")
                     setIndicator(indEcu, "ECU", "🟢")
+                    elmChecker = checker
                 } else {
                     appendStatus("\n⚠️ Ошибки: ${r.joinToString(", ")}")
                     setIndicator(indEcu, "ECU", "🟢")
+                    elmChecker = checker
                 }
                 setActionState(State.DTC)
             }
@@ -283,18 +285,21 @@ class MainActivity : AppCompatActivity() {
 
         thread(name = "DynamicTest", isDaemon = true) {
             try {
-                val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script?mode=dynamic", "")
-                val scriptJson = client.downloadScript()
-                val script = org.json.JSONObject(scriptJson)
-                val stepsArr = script.getJSONArray("steps")
-                val interval = script.optLong("interval_ms", 250)
-                val steps = (0 until stepsArr.length()).map {
-                    val s = stepsArr.getJSONObject(it)
-                    ru.elmer.client.script.DynamicCollector.ElmStep(s.getString("id"), s.getString("cmd"), s.getString("desc"))
+                val checker = elmChecker
+                if (checker == null) {
+                    ui { appendStatus("\n❌ Сначала считайте ошибки") }
+                    return@thread
                 }
-                val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
                 checker.ensureConnected()
-                val elmProto = checker.getElm() ?: run { ui { appendStatus("\n❌ Нет связи с ELM") }; return@thread }
+                val elmProto = checker.getElm()
+                    ?: run { ui { appendStatus("\n❌ Нет связи с ELM") }; return@thread }
+                val steps = listOf(
+                    "0104" to "pid_04", "0105" to "pid_05", "0106" to "pid_06",
+                    "0107" to "pid_07", "010B" to "pid_0B", "010C" to "pid_0C",
+                    "010D" to "pid_0D", "010E" to "pid_0E", "010F" to "pid_0F",
+                    "0110" to "pid_10", "0111" to "pid_11", "011F" to "pid_1F"
+                ).map { ru.elmer.client.script.DynamicCollector.ElmStep(it.second, it.first, it.second) }
+                val interval = 250L
 
                 val timer = startTimer()
                 val collector = ru.elmer.client.script.DynamicCollector(elmProto, steps, interval,
@@ -343,7 +348,7 @@ class MainActivity : AppCompatActivity() {
                     val clientInfo = mapOf("phone_model" to Build.MODEL, "app_version" to (packageManager.getPackageInfo(packageName, 0).versionName ?: "?"))
                     val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
                     val dynForUpload = samples.map { batch -> batch.map { r -> mapOf("step_id" to r.stepId, "cmd" to r.cmd, "raw" to r.raw, "decoded" to r.decoded) } }
-                    val resp = client.uploadSession(sid, responses, clientInfo, text, dynForUpload)
+                    val resp = client.uploadSession(sid, emptyList(), clientInfo, text, dynForUpload)
                     dynamicSamples = null
                     if (resp != null) {
                         db.markUploaded(sid)
