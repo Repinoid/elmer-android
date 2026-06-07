@@ -180,13 +180,33 @@ class MainActivity : AppCompatActivity() {
 
     private fun onAction() {
         when (state) {
-            State.INIT -> scanDtc()
-            State.DTC  -> runDiagnostics()
-            State.DIAG -> startDynamicRecording()
-            State.START -> { /* START уже нажат, ждём */ }
+            State.INIT -> {
+                if (!indElm.text.contains("🟢")) {
+                    appendStatus("\n⚠️ Нет связи с ELM — сканирование невозможно")
+                    return
+                }
+                scanDtc()
+            }
+            State.DTC  -> {
+                if (!indElm.text.contains("🟢")) {
+                    appendStatus("\n⚠️ Нет связи с ELM — диагностика невозможна")
+                    return
+                }
+                runDiagnostics()
+            }
+            State.DIAG -> {
+                if (!indElm.text.contains("🟢")) {
+                    appendStatus("\n⚠️ Нет связи с ELM — тест невозможен")
+                    return
+                }
+                startDynamicRecording()
+            }
+            State.START -> { /* запись идёт, ждём СТОП */ }
             State.STOP  -> stopDynamicRecording()
         }
     }
+
+    private fun elmOk(): Boolean = indElm.text.contains("🟢")
 
     private fun setActionState(newState: State) {
         state = newState
