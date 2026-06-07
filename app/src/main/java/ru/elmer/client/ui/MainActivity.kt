@@ -181,16 +181,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkLlm() {
-        setIndicator(indLlm, "🎓", "🟡")
+        setIndicator(indLlm, "LLM", "🟡")
         try {
             val url = java.net.URL("https://obdai.ru/api/v1/ping-llm")
             val conn = url.openConnection() as java.net.HttpURLConnection
             conn.connectTimeout = 5000; conn.readTimeout = 5000
             val ok = conn.responseCode == 200
             conn.disconnect()
-            setIndicator(indLlm, "🎓", if (ok) "🟢" else "🔴")
+            setIndicator(indLlm, "LLM", if (ok) "🟢" else "🔴")
         } catch (e: Exception) {
-            setIndicator(indLlm, "🎓", "🔴")
+            setIndicator(indLlm, "LLM", "🔴")
         }
     }
 
