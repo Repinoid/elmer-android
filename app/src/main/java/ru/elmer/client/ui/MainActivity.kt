@@ -482,6 +482,9 @@ class MainActivity : AppCompatActivity() {
     private var dynamicSamples: MutableList<List<ru.elmer.client.script.DynamicCollector.SampleResponse>>? = null
 
     private fun startDynamicTest(mode: String) {
+        if (btAdapter == null) { appendStatus("\n❌ Bluetooth не поддерживается"); return }
+        // Защита от двойного нажатия
+        if (dynamicCollector?.isRunning() == true) { appendStatus("\n⚠️ Тест уже идёт"); return }
         val dev = elmDevice ?: findElmDevice() ?: return
         elmDevice = dev
         val isDrive = mode == "drive"
@@ -508,6 +511,8 @@ class MainActivity : AppCompatActivity() {
 
         var started = false
 
+        // Снимаем старый listener чтобы не накапливать
+        btnScript.setOnClickListener(null)
         btnScript.setOnClickListener {
             if (!started) {
                 // СТАРТ
@@ -537,7 +542,11 @@ class MainActivity : AppCompatActivity() {
                         val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
                         if (!checker.isConnected()) {
                             ui { appendStatus("\n⏳ Подключение к ELM...") }
-                            checker.ensureConnected()
+                            if (!checker.ensureConnected()) {
+                                ui { appendStatus("\n❌ Не удалось подключиться") }
+                                checker.close()
+                                return@thread
+                            }
                         }
                         val elmProto = checker.getElm()
                             ?: run { ui { appendStatus("\n❌ Нет связи с ELM") }; return@thread }
@@ -545,7 +554,15 @@ class MainActivity : AppCompatActivity() {
                         val timer = startTimer()
                         val collector = ru.elmer.client.script.DynamicCollector(
                             elm = elmProto, steps = steps, intervalMs = interval,
-                            onSample = { idx -> ui { appendStatus("\r📊 ${idx + 1} отсчётов") } },
+                            onSample = { idx -> ui {
+                                // Обновляем последнюю строку вывода
+                                val current = tvStatus.text.toString()
+                                val lastNewline = current.lastIndexOf('\n')
+                                if (lastNewline >= 0) {
+                                    tvStatus.text = current.substring(0, lastNewline + 1) + "📊 ${idx + 1} отсчётов"
+                                }
+                                scrollOutput.post { scrollOutput.fullScroll(android.view.View.FOCUS_DOWN) }
+                            }},
                             onLog = { }
                         )
                         dynamicCollector = collector
