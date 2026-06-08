@@ -547,6 +547,24 @@ class MainActivity : AppCompatActivity() {
 
     private fun ui(block: () -> Unit) { runOnUiThread(block) }
 
+    private fun syncPendingSessions() {
+        thread(name = "SyncPending", isDaemon = true) {
+            try {
+                val db = SessionDb(this@MainActivity)
+                val pending = db.getPendingSessions()
+                if (pending.isEmpty()) return@thread
+                debugLog("Синхронизация ${pending.size} сессий...")
+                val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
+                for (sid in pending) {
+                    val responses = db.getResponses(sid)
+                    if (responses.isEmpty()) continue
+                    val resp = client.uploadSession(sid, responses)
+                    if (resp != null) db.markUploaded(sid) else break
+                }
+            } catch (_: Exception) { }
+        }
+    }
+
     // ── ScriptReceiver ───────────────────────────────────
 
     private fun registerScriptReceiver() {
