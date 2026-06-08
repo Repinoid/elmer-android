@@ -125,6 +125,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var debugMode = true  // временно — логировать ответы в вывод
+    private var runningDiag = false  // защита от повторного запуска
 
     private fun debugLog(msg: String) {
         if (debugMode) runOnUiThread { appendStatus("\n🔹 $msg") }
@@ -262,17 +263,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun runDiagnostics() {
+        if (runningDiag) return
+        runningDiag = true
         val serverOk = indServer.text.contains("🟢")
         if (!serverOk) {
             appendStatus("\n⚠️ Сервер недоступен")
             appendStatus("\nСделайте тест на месте: газ до 3000 об/мин, 3-4 сек, сброс.")
             setActionState(State.DIAG)
+            runningDiag = false
             return
         }
         val checker = elmChecker
-        if (checker == null) { appendStatus("\n❌ Нет связи с ELM"); return }
+        if (checker == null) { appendStatus("\n❌ Нет связи с ELM"); runningDiag = false; return }
         val elmProto = checker.getElm()
-        if (elmProto == null) { appendStatus("\n❌ ELM не инициализирован"); return }
+        if (elmProto == null) { appendStatus("\n❌ ELM не инициализирован"); runningDiag = false; return }
 
         val carInfo = etUserInput.text.toString().trim()
         val timer = startTimer()
@@ -327,10 +331,13 @@ class MainActivity : AppCompatActivity() {
                 ui { appendStatus("\n❌ ${e.message}") }
             }
             ui { setActionState(State.DIAG) }
+            runningDiag = false
         }
     }
 
     private fun startDynamicRecording() {
+        if (runningDiag) return
+        runningDiag = true
         val dev = elmDevice ?: run { appendStatus("\n❌ ELM не найден"); return }
         appendStatus("\n\n⏱ ТЕСТ")
         appendStatus("\n⚠️ Газ до ~3000 об/мин, 3-4 сек, резко сбросьте.")
@@ -343,11 +350,12 @@ class MainActivity : AppCompatActivity() {
                 val checker = elmChecker
                 if (checker == null) {
                     ui { appendStatus("\n❌ Сначала считайте ошибки") }
+                    runningDiag = false
                     return@thread
                 }
                 checker.ensureConnected()
                 val elmProto = checker.getElm()
-                    ?: run { ui { appendStatus("\n❌ Нет связи с ELM") }; return@thread }
+                    ?: run { ui { appendStatus("\n❌ Нет связи с ELM") }; runningDiag = false; return@thread }
                 val steps = listOf(
                     "0104" to "pid_04", "0105" to "pid_05", "0106" to "pid_06",
                     "0107" to "pid_07", "010B" to "pid_0B", "010C" to "pid_0C",
@@ -369,9 +377,11 @@ class MainActivity : AppCompatActivity() {
                 dynamicSamples = samples.toMutableList()
                 ui { appendStatus("\n📊 Записано: ${samples.size} отсчётов") }
                 ui { appendStatus("\nНажмите ➤ для отправки на сервер.") }
+                runningDiag = false
             } catch (e: Exception) {
                 timer?.set(false)
                 ui { appendStatus("\n❌ ${e.message}") }
+                runningDiag = false
             }
         }
     }
@@ -503,8 +513,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private var timerRunning: java.util.concurrent.atomic.AtomicBoolean? = null
+
     private fun startTimer(): java.util.concurrent.atomic.AtomicBoolean {
+        timerRunning?.set(false)
         val running = java.util.concurrent.atomic.AtomicBoolean(true)
+        timerRunning = running
         val tvTimer = findViewById<TextView>(R.id.tv_timer)
         runOnUiThread { tvTimer.visibility = View.VISIBLE }
         thread(name = "Timer", isDaemon = true) {
