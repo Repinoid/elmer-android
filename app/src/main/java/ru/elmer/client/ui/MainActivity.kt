@@ -283,6 +283,8 @@ class MainActivity : AppCompatActivity() {
 
         val carInfo = etUserInput.text.toString().trim()
         val timer = startTimer()
+        btnAction.text = "⏳ ОБРАБОТКА..."
+        btnAction.isEnabled = false
 
         thread(name = "Diagnostics", isDaemon = true) {
             try {
@@ -334,6 +336,7 @@ class MainActivity : AppCompatActivity() {
                 ui { appendStatus("\n❌ ${e.message}") }
             }
             ui { setActionState(State.DIAG) }
+            ui { btnAction.isEnabled = true }
             runningDiag = false
         }
     }
