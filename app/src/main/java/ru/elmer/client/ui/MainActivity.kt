@@ -463,41 +463,76 @@ class MainActivity : AppCompatActivity() {
     // ── История ──────────────────────────────────────────
 
     private fun showHistory() {
-        val db = SessionDb(this)
-        val sessions = db.getSessions()
-        if (sessions.isEmpty()) { appendStatus("\n📋 История пуста"); return }
-        val recent = sessions.take(20)
-        val items = recent.map { s ->
-            val dt = s["created_at"]?.let { java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(it.toLong() * 1000)) } ?: "?"
-            val title = s["title"] ?: "Диагностика"
-            val prefix = if (s["uploaded"] == "1") "✅" else "⏳"
-            "$prefix [$dt] $title"
-        }.toTypedArray()
-        val diagnoses = recent.map { s -> s["diagnosis"] ?: "(нет данных)" }
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("📋 История (${recent.size})")
-            .setItems(items) { _, which ->
-                val d = diagnoses[which]; val title = items[which]
-                val scrollView = android.widget.ScrollView(this@MainActivity).apply {
-                    setBackgroundColor(0xFF0d0d1a.toInt())
-                }
-                val tv = android.widget.TextView(this@MainActivity).apply {
-                    text = d; textSize = 15f; setTextColor(0xFFe0e0e0.toInt())
-                    setPadding(24, 16, 24, 16); setBackgroundColor(0xFF0d0d1a.toInt())
-                }
-                scrollView.addView(tv)
+        thread(name = "LoadHistory", isDaemon = true) {
+            var sessions: List<Map<String, String?>>? = null
+            // Пробуем сервер
+            if (indServer.text.contains("🟢")) {
+                try {
+                    val req = java.net.URL("https://obdai.ru/api/v1/sessions").openConnection() as java.net.HttpURLConnection
+                    req.connectTimeout = 3000; req.readTimeout = 5000
+                    req.setRequestProperty("X-Api-Key", ru.elmer.client.BuildConfig.API_KEY)
+                    val body = if (req.responseCode == 200) req.inputStream.bufferedReader().readText() else ""
+                    req.disconnect()
+                    val json = org.json.JSONArray(body)
+                    val list = mutableListOf<Map<String, String?>>()
+                    for (i in 0 until json.length()) {
+                        val j = json.getJSONObject(i)
+                        list.add(mapOf(
+                            "id" to j.optString("id"), "title" to j.optString("title"),
+                            "created_at" to j.optString("created_at"), "uploaded" to "1",
+                            "diagnosis" to j.optString("diagnosis")
+                        ))
+                    }
+                    sessions = list
+                } catch (_: Exception) { }
+            }
+            // Fallback: локальная БД
+            if (sessions == null || sessions.isEmpty()) {
+                val db = SessionDb(this@MainActivity)
+                sessions = db.getSessions()
+            }
+            val s = sessions
+            if (s == null || s.isEmpty()) {
+                runOnUiThread { appendStatus("\n📋 История пуста") }; return@thread
+            }
+            val recent = s.take(10)
+            val items = recent.map { x ->
+                val ts = x["created_at"]?.let {
+                    try { java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(it.toLong() * 1000)) }
+                    catch (_: Exception) { it.take(16) }
+                } ?: "?"
+                val title = x["title"] ?: "Диагностика"
+                val prefix = if (x["uploaded"] == "1") "✅" else "⏳"
+                "$prefix [$ts] $title"
+            }.toTypedArray()
+            val diagnoses = recent.map { x -> x["diagnosis"] ?: "(нет данных)" }
+            runOnUiThread {
                 androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
-                    .setTitle(title).setView(scrollView)
-                    .setPositiveButton("📤 Поделиться") { _, _ ->
-                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                            type = "text/plain"; putExtra(android.content.Intent.EXTRA_SUBJECT, "elmAI: $title")
-                            putExtra(android.content.Intent.EXTRA_TEXT, "elmAI диагностика\n$title\n\n$d")
+                    .setTitle("📋 История (${recent.size})")
+                    .setItems(items) { _, which ->
+                        val d = diagnoses[which]; val title = items[which]
+                        val scrollView = android.widget.ScrollView(this@MainActivity).apply {
+                            setBackgroundColor(0xFF0d0d1a.toInt())
                         }
-                        startActivity(android.content.Intent.createChooser(intent, "Поделиться"))
+                        val tv = android.widget.TextView(this@MainActivity).apply {
+                            text = d; textSize = 15f; setTextColor(0xFFe0e0e0.toInt())
+                            setPadding(24, 16, 24, 16); setBackgroundColor(0xFF0d0d1a.toInt())
+                        }
+                        scrollView.addView(tv)
+                        androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                            .setTitle(title).setView(scrollView)
+                            .setPositiveButton("📤 Поделиться") { _, _ ->
+                                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                    type = "text/plain"; putExtra(android.content.Intent.EXTRA_SUBJECT, "elmAI: $title")
+                                    putExtra(android.content.Intent.EXTRA_TEXT, "elmAI диагностика\n$title\n\n$d")
+                                }
+                                startActivity(android.content.Intent.createChooser(intent, "Поделиться"))
+                            }
+                            .setNegativeButton("Закрыть", null).show()
                     }
                     .setNegativeButton("Закрыть", null).show()
             }
-            .setNegativeButton("Закрыть", null).show()
+        }
     }
 
     // ── Помощники ────────────────────────────────────────
