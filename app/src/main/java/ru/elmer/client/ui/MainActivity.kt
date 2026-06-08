@@ -127,7 +127,7 @@ class MainActivity : AppCompatActivity() {
     private var debugMode = true  // временно — логировать ответы в вывод
 
     private fun debugLog(msg: String) {
-        if (debugMode) appendStatus("\n🔹 $msg")
+        if (debugMode) runOnUiThread { appendStatus("\n🔹 $msg") }
     }
 
     private fun startChecks() {
