@@ -356,9 +356,13 @@ class MainActivity : AppCompatActivity() {
                     runningDiag = false
                     return@thread
                 }
-                checker.ensureConnected()
-                val elmProto = checker.getElm()
-                    ?: run { ui { appendStatus("\n❌ Нет связи с ELM") }; runningDiag = false; return@thread }
+                if (!checker.ensureConnected()) {
+                    Thread.sleep(500)
+                    if (!checker.ensureConnected() || checker.getElm() == null) {
+                        ui { appendStatus("\n❌ Нет связи с ELM") }; ui { setActionState(State.INIT) }; runningDiag = false; return@thread
+                    }
+                }
+                val elmProto = checker.getElm()!!
                 val steps = listOf(
                     "0104" to "pid_04", "0105" to "pid_05", "0106" to "pid_06",
                     "0107" to "pid_07", "010B" to "pid_0B", "010C" to "pid_0C",
