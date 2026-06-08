@@ -149,7 +149,10 @@ class MainActivity : AppCompatActivity() {
             conn.disconnect()
             debugLog("Сервер: $code")
             setIndicator(indServer, "📡", if (code == 200) "🟢" else "🔴")
-            if (code == 200) checkLlm()
+            if (code == 200) {
+                checkLlm()
+                syncPendingSessions()
+            }
         } catch (e: Exception) {
             debugLog("Сервер: ${e.message}")
             setIndicator(indServer, "📡", "🔴")
@@ -475,10 +478,12 @@ class MainActivity : AppCompatActivity() {
             .setTitle("📋 История (${recent.size})")
             .setItems(items) { _, which ->
                 val d = diagnoses[which]; val title = items[which]
-                val scrollView = android.widget.ScrollView(this@MainActivity)
+                val scrollView = android.widget.ScrollView(this@MainActivity).apply {
+                    setBackgroundColor(0xFF0d0d1a.toInt())
+                }
                 val tv = android.widget.TextView(this@MainActivity).apply {
-                    text = d; textSize = 13f; setTextColor(0xFFe0e0e0.toInt())
-                    setPadding(24, 16, 24, 16)
+                    text = d; textSize = 15f; setTextColor(0xFFe0e0e0.toInt())
+                    setPadding(24, 16, 24, 16); setBackgroundColor(0xFF0d0d1a.toInt())
                 }
                 scrollView.addView(tv)
                 androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
