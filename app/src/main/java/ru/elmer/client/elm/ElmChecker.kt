@@ -173,7 +173,6 @@ class ElmChecker(
         val reasons = mutableListOf<String>()
         val e = elm ?: return SpeedTestResult(listOf(250,250,250), 750, false, "❌ ELM не инициализирован")
 
-        e.resetAdaptiveTiming()
         try { e.sendCommand("010C") } catch (_: Exception) {}
 
         onProgress("\n⏱ Тест скорости ELM...")
