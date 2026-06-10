@@ -168,8 +168,9 @@ class ElmChecker(
     fun measureResponseTime(onProgress: (String) -> Unit): SpeedTestResult {
         val testPids = listOf("010C" to "RPM", "0110" to "MAF", "0106" to "STFT")
         val perPidAvg = mutableListOf<Int>()
-        val allValid = mutableListOf<Long>()
         var hadErrors = false
+        var reliable = true
+        val reasons = mutableListOf<String>()
         val e = elm ?: return SpeedTestResult(listOf(250,250,250), 750, false, "❌ ELM не инициализирован")
 
         e.resetAdaptiveTiming()
@@ -191,37 +192,18 @@ class ElmChecker(
             }
             // Для 1-го PID — только 2 последних из 4
             val times = if (pi == 0) allTimes.takeLast(2).toMutableList() else allTimes
-            allValid.addAll(times)
             val avg = times.average().toInt()
             perPidAvg.add(avg)
             val display = times.joinToString("ms, ")
             onProgress("\n   $name: ${display}ms  (среднее ${avg}ms)")
-        }
 
-        // Проверка стабильности
-        var reliable = true
-        val reasons = mutableListOf<String>()
-
-        if (hadErrors) reasons.add("ошибки при опросе")
-        if (allValid.any { it == 0L }) reasons.add("нулевые замеры")
-
-        // Разброс: если любой замер отклоняется от среднего PID >50%
-        for ((i, avg) in perPidAvg.withIndex()) {
-            val testPid = testPids[i]
-            val base = i * 3
-            for (j in 0..2) {
-                val t = allValid[base + j]
+            // Разброс для этого PID
+            for (t in times) {
                 if (t > 0 && avg > 0 && kotlin.math.abs(t - avg).toFloat() / avg > 0.5f) {
-                    reasons.add("${testPid.second} нестабилен: ${t}ms vs среднее ${avg}ms")
-                    reliable = false
+                    if (reliable) reliable = false
+                    reasons.add("${name} нестабилен: ${t}ms vs среднее ${avg}ms")
                 }
             }
-        }
-
-        // Слишком быстрые замеры (<20ms) — признак мусора
-        if (allValid.isNotEmpty() && allValid.all { it < 20L }) {
-            reasons.add("все замеры <20ms — ELM не отвечает")
-            reliable = false
         }
 
         val batchTime = perPidAvg.sum()
