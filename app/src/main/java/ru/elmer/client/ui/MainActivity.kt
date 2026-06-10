@@ -388,22 +388,21 @@ class MainActivity : AppCompatActivity() {
                 }
                 ui { updateLastLine("📡 Готово: $okCount датчиков") }
 
-                // ── Speed-test: замер скорости ELM ──
-                val responseTimeMs = checker.measureResponseTime { msg ->
+                // ── Speed-test: замер скорости ELM — каждый PID отдельно ──
+                val perPidMs = checker.measureResponseTime { msg ->
                     ui { appendStatus(msg) }
                 }
+                val batchTime = perPidMs.sum()  // суммарное время на 3 PID
                 val elmMac = dev.address
                 // Сохраняем в профиль на сервере (best-effort)
                 try {
                     val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
-                    client.saveProfile(elmMac, responseTimeMs)
+                    client.saveProfile(elmMac, batchTime)
                 } catch (_: Exception) {}
 
                 // ── Адаптивный интервал ──
-                val numPids = 3  // RPM, MAF, STFT
-                val rawInterval = (responseTimeMs.toDouble() * numPids * 1.5).toLong()
-                val dynInterval = maxOf(250L, rawInterval)
-                ui { appendStatus("\n📡 Интервал опроса: ${dynInterval}ms (среднее ${responseTimeMs}ms × $numPids × 1.5)") }
+                val dynInterval = maxOf(250L, (batchTime.toDouble() * 1.5).toLong())
+                ui { appendStatus("\n📡 Батч ${perPidMs.joinToString("+")}=${batchTime}ms, интервал ${dynInterval}ms (×1.5)") }
 
                 // ── Динамика: 3 PID с адаптивным интервалом ──
                 val dynSteps = listOf(

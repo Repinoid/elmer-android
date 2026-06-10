@@ -132,15 +132,15 @@ class ElmChecker(
     fun getElm(): ElmProtocol? = elm
 
     /**
-     * Замер скорости ответа ELM.
-     * Посылает 3 PID (RPM, MAF, STFT) по 3 раза, усредняет.
+     * Замер скорости ответа ELM по каждому PID.
+     * Посылает 3 PID (RPM, MAF, STFT) по 3 раза, усредняет покомандно.
      * @param onProgress лямбда для вывода прогресса в UI
-     * @return среднее время ответа в ms (или 250 если не удалось)
+     * @return среднее время ответа в ms для КАЖДОГО PID (список)
      */
-    fun measureResponseTime(onProgress: (String) -> Unit): Int {
+    fun measureResponseTime(onProgress: (String) -> Unit): List<Int> {
         val testPids = listOf("010C" to "RPM", "0110" to "MAF", "0106" to "STFT")
-        val allTimes = mutableListOf<Long>()
-        val e = elm ?: return 250
+        val perPidAvg = mutableListOf<Int>()
+        val e = elm ?: return listOf(250, 250, 250)
 
         onProgress("\n⏱ Тест скорости ELM...")
         for ((cmd, name) in testPids) {
@@ -152,15 +152,14 @@ class ElmChecker(
                 } catch (_: Exception) {}
                 val dt = System.currentTimeMillis() - t0
                 times.add(dt)
-                allTimes.add(dt)
             }
-            val avg = times.average().toLong()
+            val avg = times.average().toInt()
+            perPidAvg.add(avg)
             onProgress("\n   $name: ${times.joinToString("ms, ")}ms  (среднее ${avg}ms)")
         }
 
-        val overallAvg = allTimes.average().toInt()
-        onProgress("\n📡 Среднее время ответа: ${overallAvg}ms")
-        return if (overallAvg < 20) 250 else overallAvg  // минимум 20ms — защита от мусора
+        onProgress("\n📡 Время на PID: ${perPidAvg.joinToString("ms, ")}ms")
+        return perPidAvg
     }
 
     /** Закрыть соединение с ELM327. */
