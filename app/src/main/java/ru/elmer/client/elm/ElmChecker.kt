@@ -184,7 +184,7 @@ class ElmChecker(
                 } catch (_: Exception) { "(err)" }
                 val dt = System.currentTimeMillis() - t0
                 if (pi == 0 && i == 0) {
-                    onProgress("\n   $name: [$dt ms] (разогрев)")
+                    // первый замер первого PID — молча отбрасываем
                 } else {
                     times.add(dt)
                     allValid.add(dt)
