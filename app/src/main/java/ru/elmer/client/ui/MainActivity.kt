@@ -186,13 +186,15 @@ class MainActivity : AppCompatActivity() {
                             return@thread
                         }
                         // Нет профиля — тестируем
-                        val perPid = checker.measureResponseTime { msg ->
+                        val result = checker.measureResponseTime { msg ->
                             debugLog(msg)
                         }
-                        val batchMs = perPid.sum()
-                        debugLog("Speed-test: ${perPid.joinToString("+")}=${batchMs}ms")
-                        client.saveProfile(elmMac, batchMs)
-                        debugLog("Профиль скорости сохранён")
+                        if (result.reliable) {
+                            client.saveProfile(elmMac, result.batchTime)
+                            debugLog("✅ Профиль скорости сохранён: ${result.batchTime}ms")
+                        } else {
+                            debugLog("⚠️ Данные не сохранены — проверьте контакт ELM")
+                        }
                     } catch (_: Exception) {}
                 }
             } else {
