@@ -420,11 +420,15 @@ class MainActivity : AppCompatActivity() {
                 }
                 ui { updateLastLine("📡 Готово: $okCount датчиков") }
 
-                // ── Интервал: 500ms (консервативно для ELM327 v1.5) ──
+                // ── Интервал: 500ms ──
                 val dynInterval = 500L
                 ui { appendStatus("\n📡 Интервал: ${dynInterval}ms") }
 
-                // ── Динамика: 3 PID с адаптивным интервалом ──
+                // ── Сброс ELM перед динамикой ──
+                try { elmProto.sendCommand("ATWS") } catch (_: Exception) {}
+                Thread.sleep(300)
+
+                // ── Динамика: 3 PID ──
                 val dynSteps = listOf(
                     "010C" to "RPM", "0110" to "MAF", "0106" to "STFT"
                 ).map { ru.elmer.client.script.DynamicCollector.ElmStep(it.second, it.first, it.second) }
