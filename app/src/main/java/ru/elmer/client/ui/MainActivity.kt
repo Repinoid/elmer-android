@@ -420,15 +420,9 @@ class MainActivity : AppCompatActivity() {
                 }
                 ui { updateLastLine("📡 Готово: $okCount датчиков") }
 
-                // ── Интервал из профиля (если нет — 250ms) ──
-                val batchTime = try {
-                    val c = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
-                    c.getProfileResponseTime(dev.address) ?: 0
-                } catch (_: Exception) { 0 }
-                val dynInterval = maxOf(250L, (batchTime.toDouble() * 1.5).toLong())
-                if (batchTime > 0) {
-                    ui { appendStatus("\n📡 Профиль: ${batchTime}ms на батч, интервал ${dynInterval}ms") }
-                }
+                // ── Интервал: 500ms (консервативно для ELM327 v1.5) ──
+                val dynInterval = 500L
+                ui { appendStatus("\n📡 Интервал: ${dynInterval}ms") }
 
                 // ── Динамика: 3 PID с адаптивным интервалом ──
                 val dynSteps = listOf(

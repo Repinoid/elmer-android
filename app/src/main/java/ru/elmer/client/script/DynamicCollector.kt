@@ -55,7 +55,7 @@ class DynamicCollector(
                     } catch (e: Exception) {
                         batch.add(SampleResponse(step.id, step.cmd, "(err)", e.message ?: "error", System.currentTimeMillis() - startTs))
                     }
-                    Thread.sleep(80)  // пауза между командами — ELM нужна передышка
+                    Thread.sleep(200)  // ELM327 v1.5: пауза 200ms между PID обязательна
                 }
                 if (batch.isNotEmpty()) {
                     synchronized(samples) { samples.add(batch) }
