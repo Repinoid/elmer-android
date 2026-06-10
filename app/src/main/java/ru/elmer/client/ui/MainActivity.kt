@@ -174,6 +174,27 @@ class MainActivity : AppCompatActivity() {
                 debugLog("ELM: версия=${r.version}, протокол=${r.protocol}, напряжение=${r.voltage}")
                 setIndicator(indElm, "ELM", "🟢")
                 checkEcu()
+
+                // ── Speed-test: один раз в жизни устройства ──
+                val elmMac = dev.address
+                thread(name = "SpeedTest", isDaemon = true) {
+                    try {
+                        val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
+                        val saved = client.getProfileResponseTime(elmMac)
+                        if (saved != null && saved > 0) {
+                            debugLog("Скорость ELM известна: ${saved}ms на батч")
+                            return@thread
+                        }
+                        // Нет профиля — тестируем
+                        val perPid = checker.measureResponseTime { msg ->
+                            debugLog(msg)
+                        }
+                        val batchMs = perPid.sum()
+                        debugLog("Speed-test: ${perPid.joinToString("+")}=${batchMs}ms")
+                        client.saveProfile(elmMac, batchMs)
+                        debugLog("Профиль скорости сохранён")
+                    } catch (_: Exception) {}
+                }
             } else {
                 debugLog("ELM: нет ответа")
                 setIndicator(indElm, "ELM", "🔴")
@@ -388,37 +409,14 @@ class MainActivity : AppCompatActivity() {
                 }
                 ui { updateLastLine("📡 Готово: $okCount датчиков") }
 
-                // ── Проверяем, есть ли профиль скорости ──
-                val elmMac = dev.address
-                var batchTime = 0
-                var perPidMs = listOf<Int>()
-                try {
-                    val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
-                    val saved = client.getProfileResponseTime(elmMac)
-                    if (saved != null && saved > 0) {
-                        batchTime = saved
-                        ui { appendStatus("\n📡 Профиль ELM: ${batchTime}ms на батч (скорость известна)") }
-                    }
-                } catch (_: Exception) {}
-
-                // ── Speed-test: если профиля нет ──
-                if (batchTime <= 0) {
-                    perPidMs = checker.measureResponseTime { msg ->
-                        ui { appendStatus(msg) }
-                    }
-                    batchTime = perPidMs.sum()
-                    try {
-                        val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
-                        client.saveProfile(elmMac, batchTime)
-                    } catch (_: Exception) {}
-                }
-
-                // ── Адаптивный интервал ──
+                // ── Интервал из профиля (если нет — 250ms) ──
+                val batchTime = try {
+                    val c = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
+                    c.getProfileResponseTime(dev.address) ?: 0
+                } catch (_: Exception) { 0 }
                 val dynInterval = maxOf(250L, (batchTime.toDouble() * 1.5).toLong())
-                if (perPidMs.isNotEmpty()) {
-                    ui { appendStatus("\n📡 Батч ${perPidMs.joinToString("+")}=${batchTime}ms, интервал ${dynInterval}ms") }
-                } else {
-                    ui { appendStatus("\n📡 Интервал опроса: ${dynInterval}ms (по профилю ${batchTime}ms ×1.5)") }
+                if (batchTime > 0) {
+                    ui { appendStatus("\n📡 Профиль: ${batchTime}ms на батч, интервал ${dynInterval}ms") }
                 }
 
                 // ── Динамика: 3 PID с адаптивным интервалом ──
