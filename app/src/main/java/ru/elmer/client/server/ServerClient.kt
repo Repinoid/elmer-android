@@ -171,4 +171,21 @@ class ServerClient(
         Log.w(TAG, "Server unavailable after 3 attempts: ${lastEx?.message}")
         return null
     }
+
+    /** Сохраняет response_time_ms в профиль ELM-устройства. */
+    fun saveProfile(mac: String, responseTimeMs: Int) {
+        Log.i(TAG, "Saving profile $mac responseTimeMs=$responseTimeMs")
+        try {
+            val json = JSONObject().apply { put("response_time_ms", responseTimeMs) }
+            val req = Request.Builder()
+                .url("$serverUrl/api/v1/elm/profile/$mac")
+                .also { authHeaders(it) }
+                .put(json.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            val resp = http.newCall(req).execute()
+            resp.close()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to save profile: ${e.message}")
+        }
+    }
 }

@@ -131,6 +131,38 @@ class ElmChecker(
     /** Получить ElmProtocol для прямых команд. */
     fun getElm(): ElmProtocol? = elm
 
+    /**
+     * Замер скорости ответа ELM.
+     * Посылает 3 PID (RPM, MAF, STFT) по 3 раза, усредняет.
+     * @param onProgress лямбда для вывода прогресса в UI
+     * @return среднее время ответа в ms (или 250 если не удалось)
+     */
+    fun measureResponseTime(onProgress: (String) -> Unit): Int {
+        val testPids = listOf("010C" to "RPM", "0110" to "MAF", "0106" to "STFT")
+        val allTimes = mutableListOf<Long>()
+        val e = elm ?: return 250
+
+        onProgress("\n⏱ Тест скорости ELM...")
+        for ((cmd, name) in testPids) {
+            val times = mutableListOf<Long>()
+            for (i in 1..3) {
+                val t0 = System.currentTimeMillis()
+                try {
+                    e.sendCommand(cmd)
+                } catch (_: Exception) {}
+                val dt = System.currentTimeMillis() - t0
+                times.add(dt)
+                allTimes.add(dt)
+            }
+            val avg = times.average().toLong()
+            onProgress("\n   $name: ${times.joinToString("ms, ")}ms  (среднее ${avg}ms)")
+        }
+
+        val overallAvg = allTimes.average().toInt()
+        onProgress("\n📡 Среднее время ответа: ${overallAvg}ms")
+        return if (overallAvg < 20) 250 else overallAvg  // минимум 20ms — защита от мусора
+    }
+
     /** Закрыть соединение с ELM327. */
     fun close() {
         try { socket?.close() } catch (_: Exception) {}

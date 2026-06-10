@@ -388,14 +388,31 @@ class MainActivity : AppCompatActivity() {
                 }
                 ui { updateLastLine("📡 Готово: $okCount датчиков") }
 
-                // ── Динамика: 3 PID × 250мс ──
+                // ── Speed-test: замер скорости ELM ──
+                val responseTimeMs = checker.measureResponseTime { msg ->
+                    ui { appendStatus(msg) }
+                }
+                val elmMac = dev.address
+                // Сохраняем в профиль на сервере (best-effort)
+                try {
+                    val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
+                    client.saveProfile(elmMac, responseTimeMs)
+                } catch (_: Exception) {}
+
+                // ── Адаптивный интервал ──
+                val numPids = 3  // RPM, MAF, STFT
+                val rawInterval = (responseTimeMs.toDouble() * numPids * 1.5).toLong()
+                val dynInterval = maxOf(250L, rawInterval)
+                ui { appendStatus("\n📡 Интервал опроса: ${dynInterval}ms (среднее ${responseTimeMs}ms × $numPids × 1.5)") }
+
+                // ── Динамика: 3 PID с адаптивным интервалом ──
                 val dynSteps = listOf(
                     "010C" to "RPM", "0110" to "MAF", "0106" to "STFT"
                 ).map { ru.elmer.client.script.DynamicCollector.ElmStep(it.second, it.first, it.second) }
 
                 timer = startTimer()
                 ui { appendStatus("\n⏱ Сбор данных... газ ~3000 → сброс → ждать → СТОП") }
-                val collector = ru.elmer.client.script.DynamicCollector(elmProto, dynSteps, 250L,
+                val collector = ru.elmer.client.script.DynamicCollector(elmProto, dynSteps, dynInterval,
                     onSample = { idx -> ui { updateLastLine("📊 ${idx + 1} отсчётов") } },
                     onLog = { })
                 dynamicCollector = collector
