@@ -366,16 +366,31 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 val elmProto = checker.getElm()!!
-                val steps = listOf(
-                    "0104" to "pid_04", "0105" to "pid_05", "0106" to "pid_06",
-                    "0107" to "pid_07", "010B" to "pid_0B", "010C" to "pid_0C",
-                    "010D" to "pid_0D", "010E" to "pid_0E", "010F" to "pid_0F",
-                    "0110" to "pid_10", "0111" to "pid_11", "011F" to "pid_1F"
+
+                // Статичные датчики (один раз в начале теста)
+                ui { appendStatus("\n📡 Замер статики...") }
+                val staticCmds = listOf(
+                    "0104" to "Нагрузка", "0105" to "Темп.ОЖ", "010D" to "Скорость",
+                    "010E" to "PID0E", "010F" to "IAT", "011F" to "Runtime"
+                )
+                val staticResults = mutableListOf<ru.elmer.client.script.DynamicCollector.SampleResponse>()
+                for ((cmd, desc) in staticCmds) {
+                    val raw = try { elmProto.sendCommand(cmd) } catch (_: Exception) { "(err)" }
+                    val dec = ru.elmer.client.elm.ObdDecoder.decode(cmd, raw)
+                    staticResults.add(ru.elmer.client.script.DynamicCollector.SampleResponse("static_$cmd", cmd, raw, dec))
+                    ui { updateLastLine("📡 $desc") }
+                }
+
+                // Динамические датчики (250мс)
+                val fastSteps = listOf(
+                    "0106" to "pid_06", "0107" to "pid_07",
+                    "010B" to "pid_0B", "010C" to "pid_0C",
+                    "0110" to "pid_10", "0111" to "pid_11"
                 ).map { ru.elmer.client.script.DynamicCollector.ElmStep(it.second, it.first, it.second) }
                 val interval = 250L
 
                 timer = startTimer()
-                val collector = ru.elmer.client.script.DynamicCollector(elmProto, steps, interval,
+                val collector = ru.elmer.client.script.DynamicCollector(elmProto, fastSteps, interval,
                     onSample = { idx -> ui { updateLastLine("📊 ${idx + 1} отсчётов") } },
                     onLog = { })
                 dynamicCollector = collector
@@ -384,7 +399,10 @@ class MainActivity : AppCompatActivity() {
                 while (state == State.START && collector.isRunning()) Thread.sleep(200)
                 val samples = collector.stop()
                 timer?.set(false)
-                dynamicSamples = samples.toMutableList()
+                // Вставляем статику первым "сэмплом"
+                val fullSamples = mutableListOf(staticResults.toList())
+                fullSamples.addAll(samples)
+                dynamicSamples = fullSamples.toMutableList()
                 ui { appendStatus("\n📊 Записано: ${samples.size} отсчётов") }
                 ui { appendStatus("\nНажмите ➤ для отправки на сервер.") }
                 runningDiag = false
