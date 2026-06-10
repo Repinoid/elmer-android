@@ -370,7 +370,7 @@ class MainActivity : AppCompatActivity() {
                     "0106" to "STFTb1", "0107" to "LTFTb1",
                     "010C" to "RPM", "0110" to "MAF", "0111" to "TPS"
                 ).map { ru.elmer.client.script.DynamicCollector.ElmStep(it.second, it.first, it.second) }
-                val interval = 250L
+                val interval = 500L
 
                 timer = startTimer()
                 val collector = ru.elmer.client.script.DynamicCollector(elmProto, steps, interval,
