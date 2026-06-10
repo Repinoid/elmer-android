@@ -132,6 +132,21 @@ class ElmChecker(
     fun getElm(): ElmProtocol? = elm
 
     /**
+     * Быстрая проверка: один PID (RPM), один замер.
+     * Используется при каждом подключении для сверки с профилем.
+     * @return время ответа в ms, или null если ошибка
+     */
+    fun quickCheck(): Int? {
+        val e = elm ?: return null
+        return try {
+            val t0 = System.currentTimeMillis()
+            val raw = e.sendCommand("010C")
+            val dt = System.currentTimeMillis() - t0
+            if (raw.isBlank() || raw == "(err)") null else dt.toInt()
+        } catch (_: Exception) { null }
+    }
+
+    /**
      * Результат замера скорости.
      * @param perPidAvg среднее время (ms) на каждый PID
      * @param batchTime сумма perPidAvg — время полного батча

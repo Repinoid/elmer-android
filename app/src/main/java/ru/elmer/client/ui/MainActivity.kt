@@ -182,10 +182,19 @@ class MainActivity : AppCompatActivity() {
                         val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
                         val saved = client.getProfileResponseTime(elmMac)
                         if (saved != null && saved > 0) {
-                            debugLog("Скорость ELM известна: ${saved}ms на батч")
+                            // Профиль есть — быстрая сверка
+                            val quick = checker.quickCheck()
+                            if (quick != null) {
+                                val diff = kotlin.math.abs(quick - saved).toFloat() / saved
+                                if (diff > 0.5f) {
+                                    debugLog("⚠️ Скорость ELM изменилась: было ${saved}ms, сейчас ~${quick}ms (${(diff*100).toInt()}%). Проверьте контакт.")
+                                } else {
+                                    debugLog("✅ ELM стабилен: ~${quick}ms (профиль ${saved}ms)")
+                                }
+                            }
                             return@thread
                         }
-                        // Нет профиля — тестируем
+                        // Нет профиля — полный тест
                         val result = checker.measureResponseTime { msg ->
                             debugLog(msg)
                         }
