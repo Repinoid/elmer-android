@@ -172,6 +172,7 @@ class ElmChecker(
         var hadErrors = false
         val e = elm ?: return SpeedTestResult(listOf(250,250,250), 750, false, "❌ ELM не инициализирован")
 
+        e.resetAdaptiveTiming()  // сброс после checkEcu, иначе таймаут завышен
         onProgress("\n⏱ Тест скорости ELM...")
         for ((pi, pair) in testPids.withIndex()) {
             val (cmd, name) = pair

@@ -195,6 +195,9 @@ class ElmProtocol(
 
     private fun resetTimeout() { timeoutMs = DEF_TIMEOUT }
 
+    /** Сброс адаптивного тайминга — для speed-test */
+    fun resetAdaptiveTiming() { timeoutMs = DEF_TIMEOUT }
+
     /** ATST с коротким таймаутом (v1.5 не поддерживает) */
     private fun updateAtst() {
         val v = (timeoutMs / TIMEOUT_RES).toInt().coerceAtLeast(1)
