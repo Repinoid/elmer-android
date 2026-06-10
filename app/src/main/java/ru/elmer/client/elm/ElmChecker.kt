@@ -168,20 +168,21 @@ class ElmChecker(
     fun measureResponseTime(onProgress: (String) -> Unit): SpeedTestResult {
         val testPids = listOf("010C" to "RPM", "0110" to "MAF", "0106" to "STFT")
         val perPidAvg = mutableListOf<Int>()
-        val allValid = mutableListOf<Long>()  // только учтённые замеры
+        val allValid = mutableListOf<Long>()
         var hadErrors = false
         val e = elm ?: return SpeedTestResult(listOf(250,250,250), 750, false, "❌ ELM не инициализирован")
 
         onProgress("\n⏱ Тест скорости ELM...")
-        for ((cmd, name) in testPids) {
+        for ((pi, (cmd, name)) in testPids.withIndex()) {
             val times = mutableListOf<Long>()
-            for (i in 0..3) {  // 4 замера, i=0 (первый) будет отброшен
+            val count = if (pi == 0) 4 else 3  // 1-й PID 4 замера, остальные 3
+            for (i in 0 until count) {
                 val t0 = System.currentTimeMillis()
                 val raw = try {
                     e.sendCommand(cmd)
                 } catch (_: Exception) { "(err)" }
                 val dt = System.currentTimeMillis() - t0
-                if (i == 0) {
+                if (pi == 0 && i == 0) {
                     onProgress("\n   $name: [$dt ms] (разогрев)")
                 } else {
                     times.add(dt)
@@ -189,9 +190,10 @@ class ElmChecker(
                     if (raw == "(err)" || raw.isBlank()) hadErrors = true
                 }
             }
-            val avg = times.average().toInt()
+            val avg = if (times.isNotEmpty()) times.average().toInt() else 0
             perPidAvg.add(avg)
-            onProgress("\n   $name: ${times.joinToString("ms, ")}ms  (среднее ${avg}ms)")
+            val display = times.joinToString("ms, ")
+            onProgress("\n   $name: ${display}ms  (среднее ${avg}ms)")
         }
 
         // Проверка стабильности
@@ -204,7 +206,7 @@ class ElmChecker(
         // Разброс: если любой замер отклоняется от среднего PID >50%
         for ((i, avg) in perPidAvg.withIndex()) {
             val testPid = testPids[i]
-            val base = i * 3  // 3 учтённых замера на PID
+            val base = i * if (i == 0) 3 else 3  // RPM 3 valid, MAF 3, STFT 3
             for (j in 0..2) {
                 val t = allValid[base + j]
                 if (t > 0 && avg > 0 && kotlin.math.abs(t - avg).toFloat() / avg > 0.5f) {
