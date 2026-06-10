@@ -366,26 +366,9 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 val elmProto = checker.getElm()!!
-
-                // Статичные датчики (один раз в начале теста)
-                ui { appendStatus("\n📡 Замер статики...") }
-                val staticCmds = listOf(
-                    "0104" to "Нагрузка", "0105" to "Темп.ОЖ", "010D" to "Скорость",
-                    "010E" to "PID0E", "010F" to "IAT", "011F" to "Runtime"
-                )
-                val staticResults = mutableListOf<ru.elmer.client.script.DynamicCollector.SampleResponse>()
-                for ((cmd, desc) in staticCmds) {
-                    val raw = try { elmProto.sendCommand(cmd) } catch (_: Exception) { "(err)" }
-                    val dec = ru.elmer.client.elm.ObdDecoder.decode(cmd, raw)
-                    staticResults.add(ru.elmer.client.script.DynamicCollector.SampleResponse("static_$cmd", cmd, raw, dec))
-                    ui { updateLastLine("📡 $desc") }
-                }
-
-                // Динамические датчики (250мс)
-                val fastSteps = listOf(
-                    "0106" to "pid_06", "0107" to "pid_07",
-                    "010B" to "pid_0B", "010C" to "pid_0C",
-                    "0110" to "pid_10", "0111" to "pid_11"
+                val steps = listOf(
+                    "0106" to "STFTb1", "0107" to "LTFTb1",
+                    "010C" to "RPM", "0110" to "MAF", "0111" to "TPS"
                 ).map { ru.elmer.client.script.DynamicCollector.ElmStep(it.second, it.first, it.second) }
                 val interval = 250L
 
@@ -399,10 +382,7 @@ class MainActivity : AppCompatActivity() {
                 while (state == State.START && collector.isRunning()) Thread.sleep(200)
                 val samples = collector.stop()
                 timer?.set(false)
-                // Вставляем статику первым "сэмплом"
-                val fullSamples = mutableListOf(staticResults.toList())
-                fullSamples.addAll(samples)
-                dynamicSamples = fullSamples.toMutableList()
+                dynamicSamples = samples.toMutableList()
                 ui { appendStatus("\n📊 Записано: ${samples.size} отсчётов") }
                 ui { appendStatus("\nНажмите ➤ для отправки на сервер.") }
                 runningDiag = false

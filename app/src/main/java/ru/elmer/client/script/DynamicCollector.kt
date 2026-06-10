@@ -34,11 +34,13 @@ class DynamicCollector(
         val stepId: String,
         val cmd: String,
         val raw: String,
-        val decoded: String
+        val decoded: String,
+        val ts: Long = 0  // ms от начала сбора
     )
 
     fun start() {
         running.set(true)
+        val startTs = System.currentTimeMillis()
         threadRef = thread(name = "DynamicCollector", isDaemon = true) {
             var idx = 0
             while (running.get()) {
@@ -49,9 +51,9 @@ class DynamicCollector(
                     try {
                         val raw = elm.sendCommand(step.cmd)
                         val dec = ObdDecoder.decode(step.cmd, raw)
-                        batch.add(SampleResponse(step.id, step.cmd, raw, dec))
+                        batch.add(SampleResponse(step.id, step.cmd, raw, dec, System.currentTimeMillis() - startTs))
                     } catch (e: Exception) {
-                        batch.add(SampleResponse(step.id, step.cmd, "(err)", e.message ?: "error"))
+                        batch.add(SampleResponse(step.id, step.cmd, "(err)", e.message ?: "error", System.currentTimeMillis() - startTs))
                     }
                 }
                 if (batch.isNotEmpty()) {
