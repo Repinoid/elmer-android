@@ -373,7 +373,7 @@ class MainActivity : AppCompatActivity() {
                 val interval = 250L
 
                 timer = startTimer()
-                val collector = ru.elmer.client.script.DynamicCollector(elmProto, fastSteps, interval,
+                val collector = ru.elmer.client.script.DynamicCollector(elmProto, steps, interval,
                     onSample = { idx -> ui { updateLastLine("📊 ${idx + 1} отсчётов") } },
                     onLog = { })
                 dynamicCollector = collector
