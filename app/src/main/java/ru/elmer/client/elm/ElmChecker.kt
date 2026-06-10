@@ -176,7 +176,7 @@ class ElmChecker(
         onProgress("\n⏱ Тест скорости ELM...")
         for ((pi, pair) in testPids.withIndex()) {
             val (cmd, name) = pair
-            val allTimes = mutableListOf<Long>()
+            val times = mutableListOf<Long>()
             val count = if (pi == 0) 4 else 3
             for (i in 0 until count) {
                 val t0 = System.currentTimeMillis()
@@ -184,12 +184,12 @@ class ElmChecker(
                     e.sendCommand(cmd)
                 } catch (_: Exception) { "(err)" }
                 val dt = System.currentTimeMillis() - t0
-                allTimes.add(dt)
+                // 1-й PID, 1-й замер — пропускаем (ELM просыпается)
+                if (pi == 0 && times.isEmpty() && i == 0) continue
+                times.add(dt)
+                allValid.add(dt)
                 if (raw == "(err)" || raw.isBlank()) hadErrors = true
             }
-            // Для 1-го PID отбрасываем только 1-й замер (ELM просыпается)
-            val times = if (pi == 0) allTimes.drop(1).toMutableList() else allTimes
-            allValid.addAll(times)
             val avg = if (times.isNotEmpty()) times.average().toInt() else 0
             perPidAvg.add(avg)
             val display = times.joinToString("ms, ")
