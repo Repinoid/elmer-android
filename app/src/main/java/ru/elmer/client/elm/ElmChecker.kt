@@ -162,28 +162,32 @@ class ElmChecker(
 
     /**
      * Замер скорости ответа ELM по каждому PID.
-     * Посылает 3 PID (RPM, MAF, STFT) по 3 раза, усредняет покомандно.
+     * На каждый PID — 4 замера, первый отбрасывается (ELM "просыпается" после паузы).
      * Проверяет стабильность: если разброс >50% или есть ошибки — unreliable.
      */
     fun measureResponseTime(onProgress: (String) -> Unit): SpeedTestResult {
         val testPids = listOf("010C" to "RPM", "0110" to "MAF", "0106" to "STFT")
         val perPidAvg = mutableListOf<Int>()
-        val allRaw = mutableListOf<Long>()
+        val allValid = mutableListOf<Long>()  // только учтённые замеры
         var hadErrors = false
         val e = elm ?: return SpeedTestResult(listOf(250,250,250), 750, false, "❌ ELM не инициализирован")
 
         onProgress("\n⏱ Тест скорости ELM...")
         for ((cmd, name) in testPids) {
             val times = mutableListOf<Long>()
-            for (i in 1..3) {
+            for (i in 0..3) {  // 4 замера, i=0 (первый) будет отброшен
                 val t0 = System.currentTimeMillis()
                 val raw = try {
                     e.sendCommand(cmd)
                 } catch (_: Exception) { "(err)" }
                 val dt = System.currentTimeMillis() - t0
-                times.add(dt)
-                allRaw.add(dt)
-                if (raw == "(err)" || raw.isBlank()) hadErrors = true
+                if (i == 0) {
+                    onProgress("\n   $name: [$dt ms] (разогрев)")
+                } else {
+                    times.add(dt)
+                    allValid.add(dt)
+                    if (raw == "(err)" || raw.isBlank()) hadErrors = true
+                }
             }
             val avg = times.average().toInt()
             perPidAvg.add(avg)
@@ -195,15 +199,14 @@ class ElmChecker(
         val reasons = mutableListOf<String>()
 
         if (hadErrors) reasons.add("ошибки при опросе")
-        if (allRaw.any { it == 0L }) reasons.add("нулевые замеры")
+        if (allValid.any { it == 0L }) reasons.add("нулевые замеры")
 
         // Разброс: если любой замер отклоняется от среднего PID >50%
         for ((i, avg) in perPidAvg.withIndex()) {
             val testPid = testPids[i]
-            // берём 3 замера этого PID (индексы i*3 .. i*3+2)
-            val base = i * 3
+            val base = i * 3  // 3 учтённых замера на PID
             for (j in 0..2) {
-                val t = allRaw[base + j]
+                val t = allValid[base + j]
                 if (t > 0 && avg > 0 && kotlin.math.abs(t - avg).toFloat() / avg > 0.5f) {
                     reasons.add("${testPid.second} нестабилен: ${t}ms vs среднее ${avg}ms")
                     reliable = false
@@ -212,7 +215,7 @@ class ElmChecker(
         }
 
         // Слишком быстрые замеры (<20ms) — признак мусора
-        if (allRaw.isNotEmpty() && allRaw.all { it < 20L }) {
+        if (allValid.isNotEmpty() && allValid.all { it < 20L }) {
             reasons.add("все замеры <20ms — ELM не отвечает")
             reliable = false
         }
