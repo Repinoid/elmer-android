@@ -388,21 +388,38 @@ class MainActivity : AppCompatActivity() {
                 }
                 ui { updateLastLine("📡 Готово: $okCount датчиков") }
 
-                // ── Speed-test: замер скорости ELM — каждый PID отдельно ──
-                val perPidMs = checker.measureResponseTime { msg ->
-                    ui { appendStatus(msg) }
-                }
-                val batchTime = perPidMs.sum()  // суммарное время на 3 PID
+                // ── Проверяем, есть ли профиль скорости ──
                 val elmMac = dev.address
-                // Сохраняем в профиль на сервере (best-effort)
+                var batchTime = 0
+                var perPidMs = listOf<Int>()
                 try {
                     val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
-                    client.saveProfile(elmMac, batchTime)
+                    val saved = client.getProfileResponseTime(elmMac)
+                    if (saved != null && saved > 0) {
+                        batchTime = saved
+                        ui { appendStatus("\n📡 Профиль ELM: ${batchTime}ms на батч (скорость известна)") }
+                    }
                 } catch (_: Exception) {}
+
+                // ── Speed-test: если профиля нет ──
+                if (batchTime <= 0) {
+                    perPidMs = checker.measureResponseTime { msg ->
+                        ui { appendStatus(msg) }
+                    }
+                    batchTime = perPidMs.sum()
+                    try {
+                        val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
+                        client.saveProfile(elmMac, batchTime)
+                    } catch (_: Exception) {}
+                }
 
                 // ── Адаптивный интервал ──
                 val dynInterval = maxOf(250L, (batchTime.toDouble() * 1.5).toLong())
-                ui { appendStatus("\n📡 Батч ${perPidMs.joinToString("+")}=${batchTime}ms, интервал ${dynInterval}ms (×1.5)") }
+                if (perPidMs.isNotEmpty()) {
+                    ui { appendStatus("\n📡 Батч ${perPidMs.joinToString("+")}=${batchTime}ms, интервал ${dynInterval}ms") }
+                } else {
+                    ui { appendStatus("\n📡 Интервал опроса: ${dynInterval}ms (по профилю ${batchTime}ms ×1.5)") }
+                }
 
                 // ── Динамика: 3 PID с адаптивным интервалом ──
                 val dynSteps = listOf(

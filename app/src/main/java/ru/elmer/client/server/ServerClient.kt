@@ -188,4 +188,19 @@ class ServerClient(
             Log.w(TAG, "Failed to save profile: ${e.message}")
         }
     }
+
+    /** Запрашивает профиль ELM по MAC. Возвращает response_time_ms или null. */
+    fun getProfileResponseTime(mac: String): Int? {
+        return try {
+            val req = Request.Builder()
+                .url("$serverUrl/api/v1/elm/profile/$mac")
+                .also { authHeaders(it) }
+                .build()
+            val resp = http.newCall(req).execute()
+            val body = resp.body?.string() ?: "{}"
+            resp.close()
+            val j = JSONObject(body)
+            if (j.has("response_time_ms")) j.getInt("response_time_ms") else null
+        } catch (_: Exception) { null }
+    }
 }
