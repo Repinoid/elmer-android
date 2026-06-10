@@ -25,7 +25,7 @@ android {
         minSdk = 24
         targetSdk = 34
         versionCode = 38
-        versionName = "1.7.0-dev"
+        versionName = "1.8.0-dev"
     }
 
     buildTypes {
