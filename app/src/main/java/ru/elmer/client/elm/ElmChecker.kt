@@ -173,7 +173,8 @@ class ElmChecker(
         val e = elm ?: return SpeedTestResult(listOf(250,250,250), 750, false, "❌ ELM не инициализирован")
 
         onProgress("\n⏱ Тест скорости ELM...")
-        for ((pi, (cmd, name)) in testPids.withIndex()) {
+        for ((pi, pair) in testPids.withIndex()) {
+            val (cmd, name) = pair
             val times = mutableListOf<Long>()
             val count = if (pi == 0) 4 else 3  // 1-й PID 4 замера, остальные 3
             for (i in 0 until count) {
@@ -206,7 +207,7 @@ class ElmChecker(
         // Разброс: если любой замер отклоняется от среднего PID >50%
         for ((i, avg) in perPidAvg.withIndex()) {
             val testPid = testPids[i]
-            val base = i * if (i == 0) 3 else 3  // RPM 3 valid, MAF 3, STFT 3
+            val base = i * 3
             for (j in 0..2) {
                 val t = allValid[base + j]
                 if (t > 0 && avg > 0 && kotlin.math.abs(t - avg).toFloat() / avg > 0.5f) {
