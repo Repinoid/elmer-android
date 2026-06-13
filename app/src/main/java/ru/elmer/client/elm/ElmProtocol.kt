@@ -73,18 +73,15 @@ class ElmProtocol(
 
     private fun exec(cmd: String, timeout: Long): String {
         write(cmd)
-        var t = timeout
-        for (i in 0 until MAX_RETRIES) {
-            try {
-                return handle(read(t))
-            } catch (_: TimeoutException) {
-                if (state == State.INITIALIZING) t += 1000
-                else { increaseTimeout(); t = timeoutMs }
-            }
+        try {
+            return handle(read(timeout))
+        } catch (_: TimeoutException) {
+            Log.w(TAG, "timeout for $cmd")
+            increaseTimeout()
+            state = State.ERROR
+            drainInput()
+            return ""
         }
-        Log.e(TAG, "no response for $cmd")
-        state = State.ERROR
-        return ""
     }
 
     // ── Обработка ответа ──────────────────────────────────

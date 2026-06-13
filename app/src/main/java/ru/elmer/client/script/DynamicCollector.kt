@@ -52,10 +52,12 @@ class DynamicCollector(
                         val raw = elm.sendCommand(step.cmd)
                         val dec = ObdDecoder.decode(step.cmd, raw)
                         batch.add(SampleResponse(step.id, step.cmd, raw, dec, System.currentTimeMillis() - startTs))
+                        // Стабильность для v1.5
+                        Thread.sleep(100)
                     } catch (e: Exception) {
                         batch.add(SampleResponse(step.id, step.cmd, "(err)", e.message ?: "error", System.currentTimeMillis() - startTs))
                     }
-                    Thread.sleep(350)
+                    Thread.sleep(100)  // v1.5: мин. пауза между PID
                 }
                 if (batch.isNotEmpty()) {
                     synchronized(samples) { samples.add(batch) }

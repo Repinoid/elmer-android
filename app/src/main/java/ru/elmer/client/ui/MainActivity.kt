@@ -424,9 +424,17 @@ class MainActivity : AppCompatActivity() {
                 val dynInterval = 500L
                 ui { appendStatus("\n📡 Интервал: ${dynInterval}ms") }
 
-                // ── Сброс ELM перед динамикой ──
-                try { elmProto.sendCommand("ATWS") } catch (_: Exception) {}
-                Thread.sleep(800)
+                // ── Сброс и настройка ELM перед динамикой ──
+                ui { updateLastLine("📡 Настройка ELM...") }
+                try {
+                    elmProto.sendCommand("ATWS")
+                    Thread.sleep(1200)
+                    elmProto.sendCommand("ATE0")
+                    elmProto.sendCommand("ATL0")
+                    elmProto.sendCommand("ATS0")
+                    elmProto.sendCommand("ATAT1")
+                } catch (_: Exception) {}
+                elmProto.drainInput()
 
                 // ── Динамика: 3 PID ──
                 val dynSteps = listOf(
