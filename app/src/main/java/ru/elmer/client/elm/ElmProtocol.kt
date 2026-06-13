@@ -142,7 +142,7 @@ class ElmProtocol(
     }
 
     /** Очистить входной буфер от мусора */
-    private fun drainInput() {
+    fun drainInput() {
         while (input.available() > 0) input.read()
     }
 
