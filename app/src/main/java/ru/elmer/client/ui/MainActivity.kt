@@ -453,7 +453,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopDynamicRecording() {
-        dynamicCollector?.let { if (it.isRunning()) { state = State.STOP } }
+        state = State.STOP
         appendStatus("\n⏹ Запись завершена")
         setActionState(State.DIAG)
     }
