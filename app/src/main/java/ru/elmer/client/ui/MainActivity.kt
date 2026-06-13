@@ -424,12 +424,9 @@ class MainActivity : AppCompatActivity() {
                 val dynInterval = 500L
                 ui { appendStatus("\n📡 Интервал: ${dynInterval}ms") }
 
-                // ── Подготовка ELM к динамике (без ATWS — не сбрасываем протокол) ──
-                elmProto.drainInput()
-                elmProto.sendCommand("ATE0")  // эхо выкл
-                elmProto.sendCommand("ATL0")  // переносы строк выкл
-                elmProto.sendCommand("ATS0")  // пробелы выкл — ускоряет ответ
-                elmProto.setDrainBeforeWrite(false)  // не чистить буфер между командами
+                // ── Сброс ELM перед динамикой ──
+                try { elmProto.sendCommand("ATWS") } catch (_: Exception) {}
+                Thread.sleep(800)
 
                 // ── Динамика: 3 PID ──
                 val dynSteps = listOf(
@@ -446,7 +443,6 @@ class MainActivity : AppCompatActivity() {
 
                 while (state == State.START && collector.isRunning()) Thread.sleep(200)
                 val samples = collector.stop()
-                elmProto.setDrainBeforeWrite(true)  // восстанавливаем нормальный режим
                 timer?.set(false)
 
                 // ── Контроль качества ──

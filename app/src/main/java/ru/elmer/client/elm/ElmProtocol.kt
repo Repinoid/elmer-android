@@ -39,7 +39,6 @@ class ElmProtocol(
     private var state = State.UNDEFINED
     private var timeoutMs = DEF_TIMEOUT
     private var learnedMin = TIMEOUT_MIN
-    private var drainBeforeWrite = true
 
     // ── Инициализация ─────────────────────────────────────
 
@@ -139,19 +138,16 @@ class ElmProtocol(
     // ── Побайтовое чтение ─────────────────────────────────
 
     private fun write(cmd: String) {
-        if (drainBeforeWrite) drainInput()
+        drainInput()
         output.write((cmd + "\r").toByteArray())
         output.flush()
         Log.d(TAG, "→ $cmd")
     }
 
-    /** Очистить входной буфер */
-    fun drainInput() {
+    /** Очистить входной буфер от мусора */
+    private fun drainInput() {
         while (input.available() > 0) input.read()
     }
-
-    /** Отключить drain перед write — для скоростного опроса */
-    fun setDrainBeforeWrite(on: Boolean) { drainBeforeWrite = on }
 
     @Throws(TimeoutException::class)
     private fun read(timeout: Long): String {
