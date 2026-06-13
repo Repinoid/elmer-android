@@ -58,9 +58,9 @@ class ServerClient(
         }
     }
 
-    /** Скачивает тестовый скрипт для отладки таймингов. */
+    /** Скачивает тестовый скрипт для отладки таймингов. Сервер решает wait/pids/repeat. */
     fun downloadTestScript(): String {
-        val url = "$serverUrl/api/v1/script?mode=test&wait=400&repeat=10"
+        val url = "$serverUrl/api/v1/script?mode=test"
         Log.i(TAG, "Downloading test script from $url")
         return try {
             val req = Request.Builder().url(url).also { authHeaders(it) }.build()
