@@ -82,8 +82,7 @@ class ElmProtocol(
                 else { increaseTimeout(); t = timeoutMs }
             }
         }
-        Log.w(TAG, "no response for $cmd")
-        drainInput()
+        Log.e(TAG, "no response for $cmd")
         state = State.ERROR
         return ""
     }

@@ -432,7 +432,6 @@ class MainActivity : AppCompatActivity() {
                     elmProto.sendCommand("ATE0")
                     elmProto.sendCommand("ATL0")
                     elmProto.sendCommand("ATS0")
-                    elmProto.sendCommand("ATAT1")
                 } catch (_: Exception) {}
                 elmProto.drainInput()
 
