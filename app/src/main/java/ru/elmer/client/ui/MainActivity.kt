@@ -439,9 +439,7 @@ class MainActivity : AppCompatActivity() {
                 timer?.set(false)
 
                 // ── Слияние ──
-                val fullSamples = mutableListOf(staticResults.toList())
-                fullSamples.addAll(dynResults)
-                dynamicSamples = fullSamples.toMutableList()
+                dynamicSamples = mutableListOf(staticResults.toMutableList(), dynResults.toMutableList())
 
                 val okCnt = dynResults.count { it.raw.startsWith("41") }
                 ui { appendStatus("\n📊 ${dynResults.size} шагов, $okCnt ответов (${if (okCnt * 100 / maxOf(dynResults.size, 1) >= 30) "✅" else "⚠️"})") }
