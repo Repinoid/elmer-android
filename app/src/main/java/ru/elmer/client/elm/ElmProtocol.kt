@@ -84,6 +84,7 @@ class ElmProtocol(
         }
         Log.w(TAG, "no response for $cmd")
         drainInput()
+        state = State.ERROR
         return ""
     }
 
