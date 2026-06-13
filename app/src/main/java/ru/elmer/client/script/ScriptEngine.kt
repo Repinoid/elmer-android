@@ -27,6 +27,8 @@ class ScriptEngine(
             val s = steps.getJSONObject(i)
             val cmd = s.optString("cmd", ""); if (cmd.isEmpty()) continue
             val desc = s.optString("desc", s.optString("id", "step"))
+            val waitMs = s.optInt("wait", 0)
+            if (waitMs > 0) Thread.sleep(waitMs.toLong())
             onStage("step:${i+1}/$total", desc)
             onLog("→ $cmd")
             val raw = sendCommand(cmd)

@@ -58,6 +58,22 @@ class ServerClient(
         }
     }
 
+    /** Скачивает тестовый скрипт для отладки таймингов. */
+    fun downloadTestScript(): String {
+        val url = "$serverUrl/api/v1/script?mode=test&wait=400&repeat=10"
+        Log.i(TAG, "Downloading test script from $url")
+        return try {
+            val req = Request.Builder().url(url).also { authHeaders(it) }.build()
+            val resp = http.newCall(req).execute()
+            val body = resp.body?.string() ?: "{}"
+            resp.close()
+            body
+        } catch (e: IOException) {
+            Log.w(TAG, "Test script failed: ${e.message}")
+            "{}"
+        }
+    }
+
     /** Проверка доступности сервера. */
     fun ping(): PingResult {
         Log.i(TAG, "Ping server...")

@@ -377,18 +377,14 @@ class MainActivity : AppCompatActivity() {
         if (runningDiag) return
         runningDiag = true
         val dev = elmDevice ?: run { appendStatus("\n❌ ELM не найден"); return }
-        appendStatus("\n\n⏱ ТЕСТ")
+        appendStatus("\n\n⏱ ТЕСТ (серверный скрипт)")
         appendStatus("\n⚠️ Плавно газ ~3000, сброс, ждать 3-4 сек → СТОП")
         setActionState(State.START)
 
         thread(name = "DynamicTest", isDaemon = true) {
-            var timer: java.util.concurrent.atomic.AtomicBoolean? = null
             try {
                 val checker = elmChecker
-                if (checker == null) {
-                    ui { appendStatus("\n❌ Сначала считайте ошибки") }
-                    runningDiag = false; return@thread
-                }
+                if (checker == null) { ui { appendStatus("\n❌ Сначала считайте ошибки") }; runningDiag = false; return@thread }
                 if (!checker.ensureConnected()) {
                     Thread.sleep(500)
                     if (!checker.ensureConnected() || checker.getElm() == null) {
@@ -397,7 +393,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 val elmProto = checker.getElm()!!
 
-                // ── Статика: пробуем все PID, определяем что отвечает ──
+                // ── Статика ──
                 val staticCmds = listOf(
                     "04" to "Нагрузка", "05" to "ОЖ", "06" to "STFT",
                     "07" to "LTFT", "0B" to "MAP", "0D" to "Скорость",
@@ -412,57 +408,46 @@ class MainActivity : AppCompatActivity() {
                     if (raw.startsWith("41$pid") && raw.length > 5) {
                         val dec = ru.elmer.client.elm.ObdDecoder.decode(cmd, raw)
                         staticResults.add(ru.elmer.client.script.DynamicCollector.SampleResponse("pid_$pid", cmd, raw, dec, 0))
-                        ui { updateLastLine("📡 $desc ✅") }
-                        okCount++
-                    } else {
-                        ui { updateLastLine("📡 $desc ❌ (не поддерживается)") }
-                    }
+                        ui { updateLastLine("📡 $desc ✅") }; okCount++
+                    } else { ui { updateLastLine("📡 $desc ❌") } }
                 }
                 ui { updateLastLine("📡 Готово: $okCount датчиков") }
 
-                // ── Интервал: 500ms ──
-                val dynInterval = 500L
-                ui { appendStatus("\n📡 Интервал: ${dynInterval}ms") }
+                // ── Серверный тестовый скрипт ──
+                val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
+                val scriptJson = client.downloadTestScript()
+                val script = org.json.JSONObject(scriptJson)
+                val title = script.optString("title", "Тест")
+                val steps = script.getJSONArray("steps")
+                val total = steps.length()
+                ui { appendStatus("\n📋 $title ($total шагов)") }
 
-                // ── Очистка буфера перед динамикой ──
-                elmProto.drainInput()
-
-                // ── Динамика: 3 PID ──
-                val dynSteps = listOf(
-                    "010C" to "RPM", "0110" to "MAF", "0106" to "STFT"
-                ).map { ru.elmer.client.script.DynamicCollector.ElmStep(it.second, it.first, it.second) }
-
-                timer = startTimer()
-                ui { appendStatus("\n⏱ Сбор данных... газ ~3000 → сброс → ждать → СТОП") }
-                val collector = ru.elmer.client.script.DynamicCollector(elmProto, dynSteps, dynInterval,
-                    onSample = { idx -> ui { updateLastLine("📊 ${idx + 1} отсчётов") } },
-                    onLog = { })
-                dynamicCollector = collector
-                collector.start()
-
-                while (state == State.START && collector.isRunning()) Thread.sleep(200)
-                val samples = collector.stop()
+                val dynResults = mutableListOf<ru.elmer.client.script.DynamicCollector.SampleResponse>()
+                val timer = startTimer()
+                for (i in 0 until total) {
+                    if (state != State.START) break
+                    val s = steps.getJSONObject(i)
+                    val cmd = s.optString("cmd", ""); if (cmd.isEmpty()) continue
+                    val desc = s.optString("desc", "")
+                    val waitMs = s.optInt("wait", 0)
+                    if (waitMs > 0) Thread.sleep(waitMs.toLong())
+                    ui { updateLastLine("📡 $desc ($cmd)") }
+                    val raw = try { elmProto.sendCommand(cmd) } catch (_: Exception) { "(err)" }
+                    val dec = ru.elmer.client.elm.ObdDecoder.decode(cmd, raw)
+                    dynResults.add(ru.elmer.client.script.DynamicCollector.SampleResponse("dyn_$i", cmd, raw, dec, 0))
+                }
                 timer?.set(false)
 
-                // ── Контроль качества ──
-                val errCnt = samples.sumOf { batch -> batch.count { !it.raw.startsWith("41") } }
-                val totalCnt = samples.sumOf { it.size }
-                val errPct = if (totalCnt > 0) (errCnt * 100 / totalCnt) else 100
-
-                if (samples.size < 6 || errPct > 30) {
-                    ui { appendStatus("\n⚠️ Мало данных (${samples.size} отсчётов, ${errPct}% ошибок).") }
-                    ui { appendStatus("\n⚠️ При СТАРТ: плавно газ ~3000 → сброс → ждать 3-4 сек → СТОП.") }
-                    ui { appendStatus("\n⚠️ ELM327 с ЭБУ общается медленно — не спешите.") }
-                }
-
+                // ── Слияние ──
                 val fullSamples = mutableListOf(staticResults.toList())
-                fullSamples.addAll(samples)
+                fullSamples.addAll(dynResults)
                 dynamicSamples = fullSamples.toMutableList()
-                ui { appendStatus("\n📊 ${samples.size} отсчётов, ${if (errPct <= 30) "✅" else "⚠️"} ${errPct}% ошибок") }
+
+                val okCnt = dynResults.count { it.raw.startsWith("41") }
+                ui { appendStatus("\n📊 ${dynResults.size} шагов, $okCnt ответов (${if (okCnt * 100 / maxOf(dynResults.size, 1) >= 30) "✅" else "⚠️"})") }
                 ui { appendStatus("\nНажмите ➤ для отправки.") }
                 runningDiag = false
             } catch (e: Exception) {
-                timer?.set(false)
                 ui { appendStatus("\n❌ ${e.message}") }
                 runningDiag = false
             }
