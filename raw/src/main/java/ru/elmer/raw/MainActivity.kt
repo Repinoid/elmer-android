@@ -24,18 +24,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvLastCmd: TextView
     private lateinit var tvLastResponse: TextView
     private lateinit var tvCount: TextView
-    private lateinit var etMac: EditText
+    private lateinit var spinnerDevices: Spinner
     private lateinit var btnStart: Button
     private lateinit var btnStop: Button
 
     private var receiver: BroadcastReceiver? = null
     private var cmdCount = 0
     private var errCount = 0
+    private var devices: List<BluetoothDevice> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Простой линейный layout
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(48, 48, 48, 48)
@@ -46,13 +46,35 @@ class MainActivity : AppCompatActivity() {
             textSize = 22f
         })
 
-        etMac = EditText(this).apply {
-            hint = "MAC-адрес ELM327 (AA:BB:CC:...)"
-            setText(BluetoothAdapter.getDefaultAdapter()
-                ?.bondedDevices?.firstOrNull { it.name?.contains("ELM") == true
-                        || it.name?.contains("OBD") == true }?.address ?: "")
+        root.addView(TextView(this).apply {
+            text = "Выбери ELM327:"
+            textSize = 14f
+            setPadding(0, 16, 0, 4)
+        })
+
+        // Загружаем сопряжённые устройства
+        devices = loadBondedDevices()
+        val names = devices.map { "${it.name ?: "?"}  (${it.address})" }
+        spinnerDevices = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity,
+                android.R.layout.simple_spinner_dropdown_item,
+                if (names.isNotEmpty()) names else listOf("Нет сопряжённых устройств"))
         }
-        root.addView(etMac)
+        root.addView(spinnerDevices)
+
+        root.addView(Button(this).apply {
+            text = "🔄 Обновить список"
+            setOnClickListener {
+                devices = loadBondedDevices()
+                val n = devices.map { "${it.name ?: "?"}  (${it.address})" }
+                (spinnerDevices.adapter as ArrayAdapter<String>).let { a ->
+                    a.clear()
+                    a.addAll(if (n.isNotEmpty()) n else listOf("Нет сопряжённых устройств"))
+                }
+                Toast.makeText(this@MainActivity,
+                    "Найдено: ${devices.size}", Toast.LENGTH_SHORT).show()
+            }
+        })
 
         val btnRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         btnStart = Button(this).apply { text = "Старт" }
@@ -113,11 +135,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startRelay() {
-        val mac = etMac.text.toString().trim()
-        if (mac.isEmpty()) { Toast.makeText(this, "Введи MAC", Toast.LENGTH_SHORT).show(); return }
+        val idx = spinnerDevices.selectedItemPosition
+        if (idx < 0 || idx >= devices.size) {
+            Toast.makeText(this, "Нет сопряжённых устройств. Сопряги ELM327 в настройках Bluetooth.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val mac = devices[idx].address
+        val name = devices[idx].name ?: mac
+        if (mac.isEmpty()) { Toast.makeText(this, "Ошибка MAC", Toast.LENGTH_SHORT).show(); return }
 
         if (!checkBtPermissions()) return
 
+        Toast.makeText(this, "Подключение к $name...", Toast.LENGTH_SHORT).show()
         val intent = Intent(this, RawRelayService::class.java).apply {
             action = RawRelayService.ACTION_RUN
             putExtra(RawRelayService.EXTRA_DEVICE_MAC, mac)
@@ -148,5 +177,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
         return true
+    }
+
+    private fun loadBondedDevices(): List<BluetoothDevice> {
+        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return emptyList()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
+                != PackageManager.PERMISSION_GRANTED) return emptyList()
+        }
+        return adapter.bondedDevices.toList()
     }
 }
