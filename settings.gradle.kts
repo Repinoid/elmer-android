@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "ElmerClient"
 include(":app")
+include(":raw")

@@ -1,0 +1,249 @@
+package ru.elmer.raw
+
+import android.app.*
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothSocket
+import android.content.*
+import android.os.Build
+import android.os.IBinder
+import android.util.Log
+import androidx.core.app.NotificationCompat
+import java.io.IOException
+import java.util.UUID
+
+/**
+ * Foreground-сервис: Bluetooth → ELM327 → поллинг команд с сервера → ответ.
+ *
+ * ТУПОЙ ретранслятор. Никакой логики диагностики.
+ * Только: получил команду → отправил в ELM → вернул сырой ответ.
+ */
+class RawRelayService : Service() {
+
+    companion object {
+        private const val TAG = "RawRelay"
+        private const val CHANNEL_ID = "elmer_raw_relay"
+        private const val NOTIFY_ID = 300
+        private val SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+
+        const val ACTION_RUN = "ru.elmer.raw.RUN"
+        const val ACTION_STOP = "ru.elmer.raw.STOP"
+        const val EXTRA_DEVICE_MAC = "device_mac"
+        const val EXTRA_SERVER_URL = "server_url"
+
+        const val BROADCAST_STATUS = "ru.elmer.raw.STATUS"
+        const val EXTRA_STATE = "state"
+        const val EXTRA_CMD = "cmd"
+        const val EXTRA_RESPONSE = "response"
+        const val EXTRA_COUNT = "count"
+        const val EXTRA_ERRORS = "errors"
+    }
+
+    private var btSocket: BluetoothSocket? = null
+    private var elm: ElmProtocol? = null
+    private var client: RelayClient? = null
+    private var worker: Thread? = null
+    private var running = false
+
+    override fun onCreate() {
+        super.onCreate()
+        createNotificationChannel()
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent == null || intent.action == ACTION_STOP) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        if (intent.action == ACTION_RUN) {
+            val mac = intent.getStringExtra(EXTRA_DEVICE_MAC) ?: return START_NOT_STICKY
+            val serverUrl = intent.getStringExtra(EXTRA_SERVER_URL)
+                ?: BuildConfig.SERVER_URL
+
+            startForeground(NOTIFY_ID, buildNotification("Подключение..."))
+            broadcast("connecting", "", "", 0, 0)
+
+            worker = Thread { relayLoop(mac, serverUrl) }
+            worker!!.start()
+        }
+
+        return START_NOT_STICKY
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onDestroy() {
+        running = false
+        worker?.interrupt()
+        closeBt()
+        Log.i(TAG, "destroyed")
+        super.onDestroy()
+    }
+
+    // ── Главный цикл ───────────────────────────────────
+
+    private fun relayLoop(mac: String, serverUrl: String) {
+        running = true
+
+        // 1. Bluetooth
+        broadcast("bt_connecting", "", "", 0, 0)
+        if (!connectBt(mac)) {
+            broadcast("bt_error", "", "", 0, 0)
+            updateNotification("Ошибка Bluetooth")
+            stopSelf()
+            return
+        }
+
+        // 2. ElmProtocol init
+        broadcast("elm_init", "", "", 0, 0)
+        updateNotification("Инициализация ELM327...")
+        elm!!.init()
+        broadcast("elm_ready", "", "", 0, 0)
+
+        // 3. Собрать инфо об устройстве
+        val elmVersion = safeSend("ATI").take(40)
+        val protocol = safeSend("ATDPN").trim()
+        val voltage = safeSend("ATRV").trim()
+        Log.i(TAG, "ELM: $elmVersion, proto=$protocol, $voltage")
+
+        // 4. Hello серверу
+        broadcast("server_hello", "", "", 0, 0)
+        updateNotification("Связь с сервером...")
+        if (!client!!.hello(elmVersion, protocol, voltage)) {
+            broadcast("server_error", "", "", 0, 0)
+            updateNotification("Сервер недоступен")
+            stopSelf()
+            return
+        }
+        broadcast("ready", "", "", 0, 0)
+        updateNotification("Готов — жду команд")
+
+        // 5. Поллинг-цикл
+        var cmdCount = 0
+        var errCount = 0
+
+        while (running) {
+            val cmdJson = client!!.pollCommand()
+            if (cmdJson == null) {
+                Thread.sleep(500)
+                continue
+            }
+
+            val seq = cmdJson.optInt("seq", 0)
+            val cmd = cmdJson.optString("cmd", "")
+            val drainFirst = cmdJson.optBoolean("drain_first", false)
+
+            if (cmd.isEmpty()) continue
+
+            Log.i(TAG, "#$seq ← $cmd")
+            broadcast("cmd_send", cmd, "", cmdCount, errCount)
+            updateNotification("#$seq: $cmd")
+
+            // Drain если нужно
+            if (drainFirst) {
+                elm!!.drainInput()
+            }
+
+            // Отправить команду
+            val t0 = System.currentTimeMillis()
+            var raw = ""
+            var prompt = false
+            var error: String? = null
+
+            try {
+                raw = elm!!.sendCommand(cmd)
+                prompt = raw.isNotEmpty()
+            } catch (e: Exception) {
+                error = e.message ?: "unknown"
+                Log.w(TAG, "sendCommand error: $error")
+                errCount++
+            }
+
+            val elapsed = System.currentTimeMillis() - t0
+            val byteCount = raw.length
+
+            // Отправить ответ на сервер
+            val ok = client!!.postResponse(seq, cmd, raw, prompt, elapsed, byteCount, error)
+            if (!ok) errCount++
+
+            cmdCount++
+            broadcast("cmd_done", cmd, raw.take(120), cmdCount, errCount)
+            Log.i(TAG, "#$seq → ${raw.take(80)} (${elapsed}ms)")
+        }
+    }
+
+    // ── Bluetooth ──────────────────────────────────────
+
+    private fun connectBt(mac: String): Boolean {
+        return try {
+            val adapter = BluetoothAdapter.getDefaultAdapter()
+                ?: return false
+            val device: BluetoothDevice = adapter.getRemoteDevice(mac)
+            btSocket = device.createRfcommSocketToServiceRecord(SPP_UUID)
+            adapter.cancelDiscovery()
+            btSocket!!.connect()
+
+            elm = ElmProtocol(btSocket!!.inputStream, btSocket!!.outputStream)
+            client = RelayClient(BuildConfig.SERVER_URL)
+            true
+        } catch (e: IOException) {
+            Log.e(TAG, "BT connect failed: ${e.message}")
+            closeBt()
+            false
+        }
+    }
+
+    private fun closeBt() {
+        try { btSocket?.close() } catch (_: Exception) {}
+        btSocket = null
+        elm = null
+    }
+
+    // ── Хелперы ────────────────────────────────────────
+
+    private fun safeSend(cmd: String): String {
+        return try {
+            elm?.sendCommand(cmd) ?: ""
+        } catch (_: Exception) { "" }
+    }
+
+    private fun broadcast(state: String, cmd: String, response: String,
+                          count: Int, errors: Int) {
+        val intent = Intent(BROADCAST_STATUS).apply {
+            putExtra(EXTRA_STATE, state)
+            putExtra(EXTRA_CMD, cmd)
+            putExtra(EXTRA_RESPONSE, response)
+            putExtra(EXTRA_COUNT, count)
+            putExtra(EXTRA_ERRORS, errors)
+        }
+        sendBroadcast(intent)
+    }
+
+    // ── Нотификация ────────────────────────────────────
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID, "ELM Raw Relay",
+                NotificationManager.IMPORTANCE_LOW
+            )
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        }
+    }
+
+    private fun buildNotification(text: String): Notification {
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("ELM Raw Relay")
+            .setContentText(text)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setOngoing(true)
+            .build()
+    }
+
+    private fun updateNotification(text: String) {
+        val nm = getSystemService(NotificationManager::class.java)
+        nm.notify(NOTIFY_ID, buildNotification(text))
+    }
+}
