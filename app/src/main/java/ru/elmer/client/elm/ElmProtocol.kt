@@ -29,7 +29,7 @@ class ElmProtocol(
         private const val TIMEOUT_MAX  = 2000L
         private const val TIMEOUT_STEP = 20L
         private const val TIMEOUT_RES  = 4
-        private const val MAX_RETRIES  = 10
+        private const val MAX_RETRIES  = 3
     }
 
     // ── Стейт-машина ──────────────────────────────────────
@@ -83,7 +83,7 @@ class ElmProtocol(
             }
         }
         Log.e(TAG, "no response for $cmd")
-        state = State.ERROR
+        // НЕ ставим ERROR — иначе следующий sendCommand запустит recover() на 5 секунд
         return ""
     }
 
