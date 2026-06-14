@@ -42,7 +42,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         root.addView(TextView(this).apply {
-            text = "ELM327 Raw Relay"
+            text = "ELM327 Raw Relay v${BuildConfig.VERSION_NAME}"
             textSize = 22f
         })
 

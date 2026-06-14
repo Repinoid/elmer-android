@@ -24,8 +24,8 @@ android {
         applicationId = "ru.elmer.raw"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0-dev"
+        versionCode = 2
+        versionName = "0.1.1-dev"
     }
 
     buildTypes {
@@ -33,11 +33,13 @@ android {
             isMinifyEnabled = false
             buildConfigField("String", "API_KEY", "\"${project.findProperty("ELMER_API_KEY") ?: ""}\"")
             buildConfigField("String", "SERVER_URL", "\"https://obdai.ru\"")
+            buildConfigField("String", "VERSION_NAME", "\"0.1.1-dev\"")
         }
         debug {
             signingConfig = signingConfigs.getByName("fixed")
             buildConfigField("String", "API_KEY", "\"${project.findProperty("ELMER_API_KEY") ?: ""}\"")
             buildConfigField("String", "SERVER_URL", "\"https://obdai.ru\"")
+            buildConfigField("String", "VERSION_NAME", "\"0.1.1-dev\"")
         }
     }
 
