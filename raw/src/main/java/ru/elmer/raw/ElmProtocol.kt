@@ -38,13 +38,17 @@ class ElmProtocol(
     private var state = State.UNDEFINED
     private var timeoutMs = DEF_TIMEOUT
     private var learnedMin = TIMEOUT_MIN
+    private var isClone = false  // v1.5 клон — не поддерживает ATAT1
 
-    /** ATSP0→ATAT1→ATS0→ATL0→ATE0. Без ретраев — макс 20с. */
+    /** ATSP0→(ATAT1 только для оригинала)→ATS0→ATL0→ATE0. */
     fun init() {
         Log.i(TAG, "init start")
         state = State.INITIALIZING
         write("ATSP0"); tryRead(4000); drainInput()
-        write("ATAT1"); tryRead(2000); drainInput()
+        // ATAT1 — только для оригинальных ELM, клоны v1.5 виснут
+        if (!isClone) {
+            write("ATAT1"); tryRead(2000); drainInput()
+        }
         updateAtst()
         write("ATS0"); tryRead(2000); drainInput()
         write("ATL0"); tryRead(2000); drainInput()
@@ -53,10 +57,19 @@ class ElmProtocol(
         Log.i(TAG, "ready")
     }
 
+    /** Определить клона по ответу ATI. Вызывать после init(). */
+    fun detectClone() {
+        val ati = try { sendCommand("ATI") } catch (_: Exception) { "" }
+        isClone = ati.contains("v1.5") || ati.contains("V1.5")
+        if (isClone) Log.i(TAG, "clone v1.5 detected — ATAT1 disabled")
+    }
+
     fun sendCommand(cmd: String): String {
         if (state == State.ERROR || state == State.DISCONNECTED) recover()
         state = State.BUSY
         val result = exec(cmd, timeoutMs)
+        // Drain after read — clone v1.5 leaves garbage in buffer
+        drainInput()
         if (state == State.BUSY) state = State.READY
         return result
     }

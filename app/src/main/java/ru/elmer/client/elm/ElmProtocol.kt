@@ -65,6 +65,8 @@ class ElmProtocol(
         if (state == State.ERROR || state == State.DISCONNECTED) recover()
         state = State.BUSY
         val result = exec(cmd, timeoutMs)
+        // Drain after read — clone v1.5 leaves garbage in buffer
+        drainInput()
         if (state == State.BUSY) state = State.READY
         return result
     }

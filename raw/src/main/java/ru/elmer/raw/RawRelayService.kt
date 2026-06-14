@@ -100,6 +100,7 @@ class RawRelayService : Service() {
         broadcast("elm_init", "", "", 0, 0)
         updateNotification("Инициализация ELM327...")
         elm!!.init()
+        elm!!.detectClone()  // v1.5 клон — отключает ATAT1
         broadcast("elm_ready", "", "", 0, 0)
 
         // 3. Собрать инфо об устройстве

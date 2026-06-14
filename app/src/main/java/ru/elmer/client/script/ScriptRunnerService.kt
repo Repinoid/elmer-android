@@ -196,6 +196,7 @@ class ScriptRunnerService : Service() {
 
         log("─── Инициализация ELM327 ───")
         elm?.init()
+        elm?.detectClone()  // v1.5 клон — отключает ATAT1
 
         val title = try {
             org.json.JSONObject(scriptJson).optString("title", "Диагностика")
