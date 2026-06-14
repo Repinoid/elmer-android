@@ -74,6 +74,24 @@ class ServerClient(
         }
     }
 
+    /** Отправляет результаты теста, получает следующий скрипт или done. */
+    fun postTestNext(jsonBody: String): org.json.JSONObject? {
+        return try {
+            val req = Request.Builder()
+                .url("$serverUrl/api/v1/test/next")
+                .also { authHeaders(it) }
+                .post(jsonBody.toRequestBody("application/json".toMediaType()))
+                .build()
+            val resp = http.newCall(req).execute()
+            val body = resp.body?.string() ?: ""
+            resp.close()
+            org.json.JSONObject(body)
+        } catch (e: Exception) {
+            Log.w(TAG, "test/next failed: ${e.message}")
+            null
+        }
+    }
+
     /** Проверка доступности сервера. */
     fun ping(): PingResult {
         Log.i(TAG, "Ping server...")

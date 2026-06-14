@@ -377,8 +377,8 @@ class MainActivity : AppCompatActivity() {
         if (runningDiag) return
         runningDiag = true
         val dev = elmDevice ?: run { appendStatus("\n❌ ELM не найден"); return }
-        appendStatus("\n\n⏱ ТЕСТ (серверный скрипт)")
-        appendStatus("\n⚠️ Плавно газ ~3000, сброс, ждать 3-4 сек → СТОП")
+        appendStatus("\n\n⏱ АВТО-ТЕСТ (сервер подбирает тайминги)")
+        appendStatus("\n⚠️ Плавно газ ~3000, сброс, ждать → не глушить!")
         setActionState(State.START)
 
         thread(name = "DynamicTest", isDaemon = true) {
@@ -400,54 +400,64 @@ class MainActivity : AppCompatActivity() {
                     "0F" to "IAT", "11" to "Дроссель", "1F" to "Runtime"
                 )
                 val staticResults = mutableListOf<ru.elmer.client.script.DynamicCollector.SampleResponse>()
-                ui { appendStatus("\n📡 Пробуем датчики...") }
-                var okCount = 0
+                ui { appendStatus("\n📡 Статика...") }
                 for ((pid, desc) in staticCmds) {
                     val cmd = "01$pid"
                     val raw = try { elmProto.sendCommand(cmd) } catch (_: Exception) { "(err)" }
                     if (raw.startsWith("41$pid") && raw.length > 5) {
                         val dec = ru.elmer.client.elm.ObdDecoder.decode(cmd, raw)
                         staticResults.add(ru.elmer.client.script.DynamicCollector.SampleResponse("pid_$pid", cmd, raw, dec, 0))
-                        ui { updateLastLine("📡 $desc ✅") }; okCount++
-                    } else { ui { updateLastLine("📡 $desc ❌") } }
+                    }
                 }
-                ui { updateLastLine("📡 Готово: $okCount датчиков") }
 
-                // ── Серверный тестовый скрипт ──
+                // ── Авто-подбор ──
                 val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
-                val scriptJson = client.downloadTestScript()
-                val script = org.json.JSONObject(scriptJson)
-                val title = script.optString("title", "Тест")
-                val steps = script.getJSONArray("steps")
-                val total = steps.length()
-                ui { appendStatus("\n📋 $title ($total шагов)") }
+                val allDyn = mutableListOf<ru.elmer.client.script.DynamicCollector.SampleResponse>()
+                var testRun = 0
+                var done = false
 
-                val dynResults = mutableListOf<ru.elmer.client.script.DynamicCollector.SampleResponse>()
-                val timer = startTimer()
-                for (i in 0 until total) {
-                    if (state != State.START) break
-                    val s = steps.getJSONObject(i)
-                    val cmd = s.optString("cmd", ""); if (cmd.isEmpty()) continue
-                    val desc = s.optString("desc", "")
-                    val waitMs = s.optInt("wait", 0)
-                    if (waitMs > 0) Thread.sleep(waitMs.toLong())
-                    ui { updateLastLine("📡 $desc ($cmd)") }
-                    val raw = try { elmProto.sendCommand(cmd) } catch (_: Exception) { "(err)" }
-                    val dec = ru.elmer.client.elm.ObdDecoder.decode(cmd, raw)
-                    dynResults.add(ru.elmer.client.script.DynamicCollector.SampleResponse("dyn_$i", cmd, raw, dec, 0))
+                while (!done && state == State.START && testRun < 10) {
+                    val scriptJson = client.downloadTestScript()
+                    val script = org.json.JSONObject(scriptJson)
+                    val steps = script.getJSONArray("steps")
+                    ui { appendStatus("\n📋 Цикл ${testRun + 1}: ${steps.length()} шагов") }
+
+                    val batch = mutableListOf<Map<String, String>>()
+                    for (i in 0 until steps.length()) {
+                        if (state != State.START) { done = true; break }
+                        val s = steps.getJSONObject(i)
+                        val cmd = s.optString("cmd", ""); if (cmd.isEmpty()) continue
+                        val waitMs = s.optInt("wait", 0)
+                        if (waitMs > 0) Thread.sleep(waitMs.toLong())
+                        val raw = try { elmProto.sendCommand(cmd) } catch (_: Exception) { "(err)" }
+                        val dec = ru.elmer.client.elm.ObdDecoder.decode(cmd, raw)
+                        allDyn.add(ru.elmer.client.script.DynamicCollector.SampleResponse("d${testRun}_$i", cmd, raw, dec, 0))
+                        batch.add(mapOf("cmd" to cmd, "raw" to raw))
+                    }
+                    if (done) break
+
+                    val next = client.postTestNext(org.json.JSONObject().apply {
+                        put("run", testRun)
+                        put("results", org.json.JSONArray().apply {
+                            for (r in batch) put(org.json.JSONObject(r))
+                        })
+                    }.toString())
+                    if (next != null) {
+                        done = next.optBoolean("done", false)
+                        ui { appendStatus("\n${next.optString("message", "")}") }
+                    } else { done = true }
+                    testRun++
                 }
-                timer?.set(false)
 
-                // ── Слияние ──
-                dynamicSamples = mutableListOf(staticResults.toMutableList(), dynResults.toMutableList())
-
-                val okCnt = dynResults.count { it.raw.startsWith("41") }
-                ui { appendStatus("\n📊 ${dynResults.size} шагов, $okCnt ответов (${if (okCnt * 100 / maxOf(dynResults.size, 1) >= 30) "✅" else "⚠️"})") }
-                ui { appendStatus("\nНажмите ➤ для отправки.") }
+                dynamicSamples = mutableListOf(staticResults.toMutableList(), allDyn.toMutableList())
+                val okCnt = allDyn.count { it.raw.startsWith("41") }
+                ui { appendStatus("\n📊 ${allDyn.size} шагов, $okCnt ответов") }
                 runningDiag = false
+                setActionState(State.DIAG)
             } catch (e: Exception) {
                 ui { appendStatus("\n❌ ${e.message}") }
                 runningDiag = false
+                setActionState(State.DIAG)
             }
         }
     }
