@@ -39,17 +39,20 @@ class ElmProtocol(
     private var state = State.UNDEFINED
     private var timeoutMs = DEF_TIMEOUT
     private var learnedMin = TIMEOUT_MIN
+    private var isClone = false  // v1.5 клон — не поддерживает ATAT1
 
     // ── Инициализация ─────────────────────────────────────
 
-    /** ATSP0→ATAT1(быстрый)→ATS0→ATL0→ATE0. Без ретраев — макс 20с. */
+    /** ATSP0→(ATAT1 только для оригинала)→ATS0→ATL0→ATE0. */
     fun init() {
         Log.i(TAG, "init start")
         state = State.INITIALIZING
 
         write("ATSP0"); tryRead(4000); drainInput()
         // ATAT1 — v1.5 клоны не поддерживают, не ждём
-        write("ATAT1"); tryRead(2000); drainInput()
+        if (!isClone) {
+            write("ATAT1"); tryRead(2000); drainInput()
+        }
         updateAtst()
         write("ATS0"); tryRead(2000); drainInput()
         write("ATL0"); tryRead(2000); drainInput()
@@ -57,6 +60,13 @@ class ElmProtocol(
 
         state = State.READY
         Log.i(TAG, "ready")
+    }
+
+    /** Определить клона по ответу ATI. Вызывать после init(). */
+    fun detectClone() {
+        val ati = try { sendCommand("ATI") } catch (_: Exception) { "" }
+        isClone = ati.contains("v1.5") || ati.contains("V1.5")
+        if (isClone) Log.i(TAG, "clone v1.5 detected — ATAT1 disabled")
     }
 
     // ── OBD-команда ───────────────────────────────────────
