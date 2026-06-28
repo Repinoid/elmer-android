@@ -63,3 +63,8 @@ class ElmActor(
     fun isClone(): Boolean = elm.isClone
 
     /** Остановить executor. */
+    fun shutdown() {
+        executor.shutdown()
+        try { executor.awaitTermination(2, TimeUnit.SECONDS) } catch (_: Exception) {}
+    }
+}
