@@ -3,6 +3,9 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val appVersionName = "0.2.3-dev"
+val appVersionCode = 7
+
 android {
     namespace = "ru.elmer.raw"
     compileSdk = 34
@@ -24,8 +27,8 @@ android {
         applicationId = "ru.elmer.raw"
         minSdk = 24
         targetSdk = 34
-        versionCode = 7
-        versionName = "0.2.3-dev"
+        versionCode = appVersionCode
+        versionName = appVersionName
     }
 
     buildTypes {
@@ -33,14 +36,15 @@ android {
             isMinifyEnabled = false
             buildConfigField("String", "API_KEY", "\"${project.findProperty("ELMER_API_KEY") ?: ""}\"")
             buildConfigField("String", "SERVER_URL", "\"https://obdai.ru\"")
-            buildConfigField("String", "VERSION_NAME", "\"0.2.2-dev\"")
+            buildConfigField("String", "VERSION_NAME", "\"${appVersionName}\"")
         }
         debug {
             signingConfig = signingConfigs.getByName("fixed")
             buildConfigField("String", "API_KEY", "\"${project.findProperty("ELMER_API_KEY") ?: ""}\"")
             buildConfigField("String", "SERVER_URL", "\"https://obdai.ru\"")
-            buildConfigField("String", "VERSION_NAME", "\"0.2.2-dev\"")
+            buildConfigField("String", "VERSION_NAME", "\"${appVersionName}\"")
         }
+    }
     }
 
     compileOptions {
