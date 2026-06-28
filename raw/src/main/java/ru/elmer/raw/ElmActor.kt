@@ -27,10 +27,12 @@ class ElmActor(
 
     /** Инициализация ELM327. Блокирует до завершения. */
     fun init() {
+        val future = executor.submit { elm.init() }
         try {
-            executor.submit { elm.init() }.get(30, TimeUnit.SECONDS)
+            future.get(45, TimeUnit.SECONDS)
         } catch (e: TimeoutException) {
-            throw IllegalStateException("ELM init timed out after 30s", e)
+            future.cancel(true)
+            throw IllegalStateException("ELM init timed out after 45s", e)
         } catch (e: ExecutionException) {
             throw IllegalStateException("ELM init failed", e.cause ?: e)
         }

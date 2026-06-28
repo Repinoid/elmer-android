@@ -30,7 +30,7 @@ class ElmProtocol(
         private const val TIMEOUT_MAX  = 2000L
         private const val TIMEOUT_STEP = 20L
         private const val TIMEOUT_RES  = 4
-        private const val MAX_RETRIES  = 6     // 500→520→540→560→580→600 — достигает TIMEOUT_MAX
+        private const val MAX_RETRIES  = 6     // потолок ретраев: 500+20×6 = 620мс
         private const val ATST_CLONE  = 0x96  // 150×4=600ms — фиксированный для клонов
     }
 
@@ -60,7 +60,6 @@ class ElmProtocol(
         write("ATS0"); tryRead(2000); drainInput()
 
         // Шаг 2: detectClone ДО ветвления ATAT1/ATST
-        write("ATI"); tryRead(2000); drainInput()
         val ati = try { sendCommand("ATI") } catch (_: Exception) { "" }
         isClone = ati.contains("v1.5") || ati.contains("V1.5")
         if (isClone) Log.i(TAG, "clone v1.5 detected — ATAT1 disabled, ATST fixed")
