@@ -33,13 +33,13 @@ android {
             isMinifyEnabled = false
             buildConfigField("String", "API_KEY", "\"${project.findProperty("ELMER_API_KEY") ?: ""}\"")
             buildConfigField("String", "SERVER_URL", "\"https://obdai.ru\"")
-            buildConfigField("String", "VERSION_NAME", "\"0.1.1-dev\"")
+            buildConfigField("String", "VERSION_NAME", "\"0.2.2-dev\"")
         }
         debug {
             signingConfig = signingConfigs.getByName("fixed")
             buildConfigField("String", "API_KEY", "\"${project.findProperty("ELMER_API_KEY") ?: ""}\"")
             buildConfigField("String", "SERVER_URL", "\"https://obdai.ru\"")
-            buildConfigField("String", "VERSION_NAME", "\"0.1.1-dev\"")
+            buildConfigField("String", "VERSION_NAME", "\"0.2.2-dev\"")
         }
     }
 
