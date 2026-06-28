@@ -110,17 +110,11 @@ class RawRelayService : Service() {
         }
         broadcast("elm_ready", "", "", 0, 0)
 
-        // 3. Собрать инфо об устройстве
-        val elmVersion = actor!!.sendBlocking("ATI", 3000).take(40)
-        val protocol = actor!!.sendBlocking("ATDPN", 2000).trim()
-        val voltage = actor!!.sendBlocking("ATRV", 2000).trim()
+        // 3. Инфо о клоне уже есть из init() (detectClone)
         val clone = if (actor!!.isClone()) " (clone v1.5)" else ""
-        Log.i(TAG, "ELM: $elmVersion$clone, proto=$protocol, $voltage")
-
-        // 4. Hello серверу
-        broadcast("server_hello", "", "", 0, 0)
-        updateNotification("Связь с сервером...")
-        if (!client!!.hello(elmVersion, protocol, voltage)) {
+        Log.i(TAG, "ELM: clone=${actor!!.isClone()}")
+        // hello с минимальной инфой — без ATDPN/ATRV чтобы не засорять буфер
+        if (!client!!.hello(if (actor!!.isClone()) "ELM327v1.5" else "ELM327", "A0", "12V")) {
             broadcast("server_error", "", "", 0, 0)
             updateNotification("Сервер недоступен")
             stopSelf()
