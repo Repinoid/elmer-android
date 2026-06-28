@@ -193,8 +193,6 @@ class RawRelayService : Service() {
             btSocket = device.createRfcommSocketToServiceRecord(SPP_UUID)
             adapter.cancelDiscovery()
             btSocket!!.connect()
-
-            elm = ElmProtocol(btSocket!!.inputStream, btSocket!!.outputStream)
             actor = ElmActor(btSocket!!.inputStream, btSocket!!.outputStream)
             client = RelayClient(BuildConfig.SERVER_URL)
             true
