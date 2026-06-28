@@ -115,6 +115,7 @@ class RawRelayService : Service() {
         val protocol = actor!!.sendBlocking("ATDPN", 2000).trim()
         val voltage = actor!!.sendBlocking("ATRV", 2000).trim()
         val clone = if (actor!!.isClone()) " (clone v1.5)" else ""
+        actor!!.drain()  // очистить хвост после info-команд
         Log.i(TAG, "ELM: $elmVersion$clone, proto=$protocol, $voltage")
 
         // 4. Hello серверу
