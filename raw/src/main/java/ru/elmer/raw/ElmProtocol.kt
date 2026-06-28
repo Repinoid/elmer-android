@@ -30,7 +30,8 @@ class ElmProtocol(
         private const val TIMEOUT_MAX  = 2000L
         private const val TIMEOUT_STEP = 20L
         private const val TIMEOUT_RES  = 4
-        private const val MAX_RETRIES  = 3
+        private const val MAX_RETRIES  = 6     // 500→520→540→560→580→600 — достигает TIMEOUT_MAX
+        private const val ATST_CLONE  = 0x96  // 150×4=600ms — фиксированный для клонов
     }
 
     private enum class State { UNDEFINED, INITIALIZING, READY, BUSY, ERROR, DISCONNECTED }
@@ -38,30 +39,45 @@ class ElmProtocol(
     private var state = State.UNDEFINED
     private var timeoutMs = DEF_TIMEOUT
     private var learnedMin = TIMEOUT_MIN
-    private var isClone = false  // v1.5 клон — не поддерживает ATAT1
+    private var isClone = false
 
-    /** ATSP0→(ATAT1 только для оригинала)→ATS0→ATL0→ATE0. */
+    /**
+     * Канонический init: ATE0→ATL0→ATS0→ATI→[ветвление]→ATSP0.
+     *
+     * Эхо выключается ПЕРВЫМ — иначе все init-команды возвращаются эхом.
+     * ATI ДО ATSP0 (работает без протокола).
+     * Клон: ATST фиксированный, ATAT1 не шлётся.
+     * Оригинал: ATAT1 + адаптивный ATST.
+     */
     fun init() {
         Log.i(TAG, "init start")
         state = State.INITIALIZING
-        write("ATSP0"); tryRead(4000); drainInput()
-        // ATAT1 — только для оригинальных ELM, клоны v1.5 виснут
-        if (!isClone) {
-            write("ATAT1"); tryRead(2000); drainInput()
-        }
-        updateAtst()
-        write("ATS0"); tryRead(2000); drainInput()
-        write("ATL0"); tryRead(2000); drainInput()
-        write("ATE0"); tryRead(2000); drainInput()
-        state = State.READY
-        Log.i(TAG, "ready")
-    }
 
-    /** Определить клона по ответу ATI. Вызывать после init(). */
-    fun detectClone() {
+        // Шаг 1: clone-safe команды (без протокола, без эха)
+        write("ATE0"); tryRead(2000); drainInput()   // эхо — ПЕРВЫМ
+        write("ATL0"); tryRead(2000); drainInput()
+        write("ATS0"); tryRead(2000); drainInput()
+
+        // Шаг 2: detectClone ДО ветвления ATAT1/ATST
+        write("ATI"); tryRead(2000); drainInput()
         val ati = try { sendCommand("ATI") } catch (_: Exception) { "" }
         isClone = ati.contains("v1.5") || ati.contains("V1.5")
-        if (isClone) Log.i(TAG, "clone v1.5 detected — ATAT1 disabled")
+        if (isClone) Log.i(TAG, "clone v1.5 detected — ATAT1 disabled, ATST fixed")
+
+        // Шаг 3: ветвление — ATAT1 или фиксированный ATST
+        if (isClone) {
+            write("ATST${ATST_CLONE.toString(16).uppercase().padStart(2, '0')}")
+            tryRead(2000); drainInput()
+        } else {
+            write("ATAT1"); tryRead(2000); drainInput()
+            updateAtst()
+        }
+
+        // Шаг 4: протокол
+        write("ATSP0"); tryRead(INIT_TIMEOUT); drainInput()
+
+        state = State.READY
+        Log.i(TAG, "ready (clone=${isClone})")
     }
 
     fun sendCommand(cmd: String): String {
