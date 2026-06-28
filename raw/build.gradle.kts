@@ -24,8 +24,8 @@ android {
         applicationId = "ru.elmer.raw"
         minSdk = 24
         targetSdk = 34
-        versionCode = 3
-        versionName = "0.1.2-dev"
+        versionCode = 4
+        versionName = "0.2.0-dev"
     }
 
     buildTypes {
