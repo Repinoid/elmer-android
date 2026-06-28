@@ -45,7 +45,6 @@ android {
             buildConfigField("String", "VERSION_NAME", "\"${appVersionName}\"")
         }
     }
-    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
