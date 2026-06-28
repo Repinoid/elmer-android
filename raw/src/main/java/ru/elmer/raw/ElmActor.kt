@@ -66,7 +66,9 @@ class ElmActor(
 
     /** Остановить executor. */
     fun shutdown() {
-        executor.shutdown()
-        try { executor.awaitTermination(2, TimeUnit.SECONDS) } catch (_: Exception) {}
+        try {
+            executor.shutdownNow()
+            executor.awaitTermination(1, TimeUnit.SECONDS)
+        } catch (_: Exception) {}
     }
 }
