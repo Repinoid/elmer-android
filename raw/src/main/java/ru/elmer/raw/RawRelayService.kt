@@ -40,7 +40,7 @@ class RawRelayService : Service() {
     }
 
     private var btSocket: BluetoothSocket? = null
-    private var elm: ElmProtocol? = null
+    private var actor: ElmActor? = null
     private var client: RelayClient? = null
     private var worker: Thread? = null
     private var running = false
@@ -96,17 +96,26 @@ class RawRelayService : Service() {
             return
         }
 
-        // 2. ElmProtocol init
+        // 2. ElmProtocol init (через actor)
         broadcast("elm_init", "", "", 0, 0)
         updateNotification("Инициализация ELM327...")
-        elm!!.init()
+        try {
+            actor!!.init()
+        } catch (e: Exception) {
+            Log.e(TAG, "init failed: ${e.message}")
+            broadcast("elm_error", "", "", 0, 0)
+            updateNotification("Ошибка инициализации ELM")
+            stopSelf()
+            return
+        }
         broadcast("elm_ready", "", "", 0, 0)
 
         // 3. Собрать инфо об устройстве
-        val elmVersion = safeSend("ATI").take(40)
-        val protocol = safeSend("ATDPN").trim()
-        val voltage = safeSend("ATRV").trim()
-        Log.i(TAG, "ELM: $elmVersion, proto=$protocol, $voltage")
+        val elmVersion = actor!!.sendBlocking("ATI", 3000).take(40)
+        val protocol = actor!!.sendBlocking("ATDPN", 2000).trim()
+        val voltage = actor!!.sendBlocking("ATRV", 2000).trim()
+        val clone = if (actor!!.isClone()) " (clone v1.5)" else ""
+        Log.i(TAG, "ELM: $elmVersion$clone, proto=$protocol, $voltage")
 
         // 4. Hello серверу
         broadcast("server_hello", "", "", 0, 0)
@@ -143,17 +152,17 @@ class RawRelayService : Service() {
 
             // Drain если нужно
             if (drainFirst) {
-                elm!!.drainInput()
+                actor!!.drain()
             }
 
-            // Отправить команду
+            // Отправить команду (через actor)
             val t0 = System.currentTimeMillis()
             var raw = ""
             var prompt = false
             var error: String? = null
 
             try {
-                raw = elm!!.sendCommand(cmd)
+                raw = actor!!.sendBlocking(cmd, 5000)
                 prompt = raw.isNotEmpty()
             } catch (e: Exception) {
                 error = e.message ?: "unknown"
@@ -186,6 +195,7 @@ class RawRelayService : Service() {
             btSocket!!.connect()
 
             elm = ElmProtocol(btSocket!!.inputStream, btSocket!!.outputStream)
+            actor = ElmActor(btSocket!!.inputStream, btSocket!!.outputStream)
             client = RelayClient(BuildConfig.SERVER_URL)
             true
         } catch (e: IOException) {
@@ -196,18 +206,13 @@ class RawRelayService : Service() {
     }
 
     private fun closeBt() {
+        actor?.shutdown()
+        actor = null
         try { btSocket?.close() } catch (_: Exception) {}
         btSocket = null
-        elm = null
     }
 
     // ── Хелперы ────────────────────────────────────────
-
-    private fun safeSend(cmd: String): String {
-        return try {
-            elm?.sendCommand(cmd) ?: ""
-        } catch (_: Exception) { "" }
-    }
 
     private fun broadcast(state: String, cmd: String, response: String,
                           count: Int, errors: Int) {

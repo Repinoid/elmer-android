@@ -36,10 +36,11 @@ class ElmProtocol(
 
     private enum class State { UNDEFINED, INITIALIZING, READY, BUSY, ERROR, DISCONNECTED }
 
-    private var state = State.UNDEFINED
+    @Volatile private var state = State.UNDEFINED
     private var timeoutMs = DEF_TIMEOUT
     private var learnedMin = TIMEOUT_MIN
-    private var isClone = false
+    @Volatile var isClone = false
+        private set
 
     /**
      * Канонический init: ATE0→ATL0→ATS0→ATI→[ветвление]→ATSP0.
