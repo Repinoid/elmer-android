@@ -103,61 +103,40 @@ class ElmProtocol(
     private fun handle(raw: String): String {
         val u = raw.uppercase().trim()
         when {
-            u.startsWith("SEARCHING") -> { /* ждём, протокол ищется */ }
+            u.startsWith("SEARCHING") -> { /* ждём */ }
 
             u.startsWith("OK") -> decreaseTimeout()
 
             u.startsWith("NODATA") || u.startsWith("NO DATA") -> {
-                // ECU не ответил — увеличиваем таймаут и шлём ATST в ELM
                 increaseTimeout()
-                updateAtst()
-                // Для клона: после NO DATA может потребоваться drain
-                if (isClone) drainInput()
+                // ATST не шлём — ломает буфер для клонов
             }
 
             u.startsWith("STOPPED") -> {
-                // Протокол остановлен — нужен полный сброс
-                Log.w(TAG, "STOPPED — protocol close + warm start")
+                Log.w(TAG, "STOPPED")
                 state = State.DISCONNECTED
                 resetTimeout()
-                write("ATPC"); tryRead(3000); drainInput()
-                write("ATWS"); tryRead(3000); drainInput()
-                // ATWS на клоне даёт двойной ответ — дочитываем
-                if (isClone) { tryRead(1000); drainInput() }
-                write("ATSP0"); tryRead(3000); drainInput()
             }
 
             u.startsWith("UNABLE") || u.startsWith("NABLETO") -> {
-                // UNABLE TO CONNECT — нет связи с ECU
-                Log.w(TAG, "UNABLE TO CONNECT — retry with protocol reset")
+                Log.w(TAG, "UNABLE TO CONNECT")
                 state = State.DISCONNECTED
-                write("ATPC"); tryRead(3000); drainInput()
-                write("ATSP0"); tryRead(3000); drainInput()
             }
 
             isBusError(u) -> {
                 Log.w(TAG, "BUS ERROR: ${raw.take(60)}")
                 state = State.DISCONNECTED
-                resetTimeout(); updateAtst()
-                write("ATPC"); tryRead(3000); drainInput()
-                // ATWS + drain для клона
-                write("ATWS"); tryRead(3000); drainInput()
-                if (isClone) { tryRead(1000); drainInput() }
-                write("ATSP0"); tryRead(3000); drainInput()
+                resetTimeout()
             }
 
             u.startsWith("ERROR") && !u.startsWith("DATA ERROR") -> {
-                Log.w(TAG, "ERROR — warm start")
+                Log.w(TAG, "ERROR")
                 state = State.ERROR
-                write("ATWS"); tryRead(3000); drainInput()
-                if (isClone) { tryRead(1000); drainInput() }
             }
 
             isDataError(u) -> {
-                Log.w(TAG, "data error — warm start")
+                Log.w(TAG, "data error")
                 state = State.ERROR
-                write("ATWS"); tryRead(3000); drainInput()
-                if (isClone) { tryRead(1000); drainInput() }
             }
 
             else -> decreaseTimeout()
@@ -167,14 +146,8 @@ class ElmProtocol(
 
     private fun recover() {
         Log.i(TAG, "recovering...")
-        state = State.INITIALIZING
-        // ATPC→ATWS→drain — правильный сброс для клонов
-        write("ATPC"); tryRead(2000); drainInput()
-        write("ATWS"); tryRead(2000); drainInput()
-        if (isClone) { tryRead(1000); drainInput() }  // двойной ответ ATWS
-        write("ATSP0"); tryRead(2000); drainInput()
-        write("ATE0"); tryRead(2000); drainInput()
         state = State.READY
+        resetTimeout()
     }
 
     private fun write(cmd: String) {
