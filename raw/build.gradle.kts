@@ -3,8 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-val appVersionName = "0.3.4-dev"
-val appVersionCode = 15
+val appVersionName = "0.3.5-dev"
+val appVersionCode = 16
 
 android {
     namespace = "ru.elmer.raw"

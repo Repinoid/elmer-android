@@ -105,7 +105,6 @@ class ElmProtocol(
         val u = raw.uppercase().trim()
         when {
             u.startsWith("SEARCHING") -> { /* ждём */ }
-
             u.startsWith("OK") -> decreaseTimeout()
 
             u.startsWith("NODATA") || u.startsWith("NO DATA") -> {
@@ -113,45 +112,30 @@ class ElmProtocol(
             }
 
             u.startsWith("STOPPED") -> {
-                Log.w(TAG, "STOPPED — restarting protocol")
+                Log.w(TAG, "STOPPED")
                 state = State.DISCONNECTED
                 resetTimeout()
-                // ATPC→ATWS→ATSP0 с ПОЛНЫМ чтением ответа
-                write("ATPC"); tryRead(3000)
-                write("ATWS"); tryRead(3000)
-                if (isClone) tryRead(1000)
-                write("ATSP0"); tryRead(3000)
             }
 
             u.startsWith("UNABLE") || u.startsWith("NABLETO") -> {
-                Log.w(TAG, "UNABLE — restarting protocol")
+                Log.w(TAG, "UNABLE")
                 state = State.DISCONNECTED
-                write("ATPC"); tryRead(3000)
-                write("ATSP0"); tryRead(3000)
             }
 
             isBusError(u) -> {
-                Log.w(TAG, "BUS ERROR: ${raw.take(60)}")
+                Log.w(TAG, "BUS ERROR")
                 state = State.DISCONNECTED
                 resetTimeout()
-                write("ATPC"); tryRead(3000)
-                write("ATWS"); tryRead(3000)
-                if (isClone) tryRead(1000)
-                write("ATSP0"); tryRead(3000)
             }
 
             u.startsWith("ERROR") && !u.startsWith("DATA ERROR") -> {
                 Log.w(TAG, "ERROR")
                 state = State.ERROR
-                write("ATWS"); tryRead(3000)
-                if (isClone) tryRead(1000)
             }
 
             isDataError(u) -> {
                 Log.w(TAG, "data error")
                 state = State.ERROR
-                write("ATWS"); tryRead(3000)
-                if (isClone) tryRead(1000)
             }
 
             else -> decreaseTimeout()

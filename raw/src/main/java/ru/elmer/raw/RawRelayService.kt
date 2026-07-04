@@ -174,6 +174,13 @@ class RawRelayService : Service() {
             cmdCount++
             broadcast("cmd_done", cmd, raw.take(120), cmdCount, errCount)
             Log.i(TAG, "#$seq → ${raw.take(80)} (${elapsed}ms)")
+
+            // Recovery: если STOPPED или таймаут — перезапустить протокол
+            if (raw == "STOPPED" || raw.isEmpty()) {
+                Log.w(TAG, "recovery: ATSP0 after STOPPED/timeout")
+                try { actor!!.sendBlocking("ATSP0", 3000) } catch (_: Exception) {}
+                try { actor!!.drain() } catch (_: Exception) {}
+            }
         }
     }
 
