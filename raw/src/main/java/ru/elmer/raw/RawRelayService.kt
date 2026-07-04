@@ -123,9 +123,6 @@ class RawRelayService : Service() {
         broadcast("ready", "", "", 0, 0)
         updateNotification("Готов — жду команд")
 
-        // Дренаж буфера после init — первая команда всегда мусор
-        try { actor!!.sendBlocking("0100", 3000) } catch (_: Exception) {}
-
         // 5. Поллинг-цикл
         var cmdCount = 0
         var errCount = 0
