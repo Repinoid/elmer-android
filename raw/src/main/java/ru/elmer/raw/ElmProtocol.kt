@@ -79,7 +79,8 @@ class ElmProtocol(
         if (state == State.ERROR || state == State.DISCONNECTED) recover()
         state = State.BUSY
         val result = exec(cmd, timeoutMs)
-        // Drain after read — clone v1.5 leaves garbage in buffer
+        // Полный дренаж с таймаутом — ловит хвосты после recovery
+        tryRead(500)
         drainInput()
         if (state == State.BUSY) state = State.READY
         return result
@@ -109,34 +110,48 @@ class ElmProtocol(
 
             u.startsWith("NODATA") || u.startsWith("NO DATA") -> {
                 increaseTimeout()
-                // ATST не шлём — ломает буфер для клонов
             }
 
             u.startsWith("STOPPED") -> {
-                Log.w(TAG, "STOPPED")
+                Log.w(TAG, "STOPPED — restarting protocol")
                 state = State.DISCONNECTED
                 resetTimeout()
+                // ATPC→ATWS→ATSP0 с ПОЛНЫМ чтением ответа
+                write("ATPC"); tryRead(3000)
+                write("ATWS"); tryRead(3000)
+                if (isClone) tryRead(1000)
+                write("ATSP0"); tryRead(3000)
             }
 
             u.startsWith("UNABLE") || u.startsWith("NABLETO") -> {
-                Log.w(TAG, "UNABLE TO CONNECT")
+                Log.w(TAG, "UNABLE — restarting protocol")
                 state = State.DISCONNECTED
+                write("ATPC"); tryRead(3000)
+                write("ATSP0"); tryRead(3000)
             }
 
             isBusError(u) -> {
                 Log.w(TAG, "BUS ERROR: ${raw.take(60)}")
                 state = State.DISCONNECTED
                 resetTimeout()
+                write("ATPC"); tryRead(3000)
+                write("ATWS"); tryRead(3000)
+                if (isClone) tryRead(1000)
+                write("ATSP0"); tryRead(3000)
             }
 
             u.startsWith("ERROR") && !u.startsWith("DATA ERROR") -> {
                 Log.w(TAG, "ERROR")
                 state = State.ERROR
+                write("ATWS"); tryRead(3000)
+                if (isClone) tryRead(1000)
             }
 
             isDataError(u) -> {
                 Log.w(TAG, "data error")
                 state = State.ERROR
+                write("ATWS"); tryRead(3000)
+                if (isClone) tryRead(1000)
             }
 
             else -> decreaseTimeout()
