@@ -126,8 +126,6 @@ class RawRelayService : Service() {
         // 5. Поллинг-цикл
         var cmdCount = 0
         var errCount = 0
-        var commandsSinceCheck = 0
-        val FREEZE_CHECK_INTERVAL = 10  // проверка залипания каждые 10 команд
 
         while (running) {
             val cmdJson = client!!.pollCommand()
@@ -174,30 +172,8 @@ class RawRelayService : Service() {
             if (!ok) errCount++
 
             cmdCount++
-            commandsSinceCheck++
             broadcast("cmd_done", cmd, raw.take(120), cmdCount, errCount)
             Log.i(TAG, "#$seq → ${raw.take(80)} (${elapsed}ms)")
-
-            // Детект залипания: каждые N команд проверяем ATRV
-            if (commandsSinceCheck >= FREEZE_CHECK_INTERVAL && actor!!.isClone()) {
-                commandsSinceCheck = 0
-                val atrv = actor!!.sendBlocking("ATRV", 2000)
-                if (!atrv.contains("V") && !atrv.matches(Regex("[0-9.]+"))) {
-                    Log.w(TAG, "ELM FROZEN — ATRV=$atrv, trying ATWS...")
-                    broadcast("elm_frozen", "ATRV=$atrv", "", cmdCount, errCount)
-                    // Попытка восстановления
-                    actor!!.sendBlocking("ATWS", 3000)
-                    Thread.sleep(2000)
-                    val atrv2 = actor!!.sendBlocking("ATRV", 2000)
-                    if (atrv2.contains("V") || atrv2.matches(Regex("[0-9.]+"))) {
-                        Log.i(TAG, "ELM recovered: ATRV=$atrv2")
-                        broadcast("elm_recovered", "ATRV=$atrv2", "", cmdCount, errCount)
-                    } else {
-                        Log.e(TAG, "ELM still frozen — requires power cycle")
-                        broadcast("elm_dead", "Требуется переподключение ELM", "", cmdCount, errCount)
-                    }
-                }
-            }
         }
     }
 
