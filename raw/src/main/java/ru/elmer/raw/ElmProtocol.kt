@@ -43,38 +43,33 @@ class ElmProtocol(
         private set
 
     /**
-     * Канонический init: ATE0→ATL0→ATS0→ATI→[ветвление]→ATSP0.
-     *
-     * Эхо выключается ПЕРВЫМ — иначе все init-команды возвращаются эхом.
-     * ATI ДО ATSP0 (работает без протокола).
-     * Клон: ATST фиксированный, ATAT1 не шлётся.
-     * Оригинал: ATAT1 + адаптивный ATST.
+     * AndrOBD init: ATSP0→[ATAT1?]→ATS0→ATL0→ATE0.
+     * ТОЧНЫЙ порядок из ElmProt.java (fr3ts0n/AndrOBD).
+     * Клон v1.5: ATAT1 и ATST не шлём.
      */
     fun init() {
         Log.i(TAG, "init start")
         state = State.INITIALIZING
 
-        // Шаг 1: clone-safe команды (без протокола, без эха)
-        write("ATE0"); tryRead(2000); drainInput()   // эхо — ПЕРВЫМ
-        write("ATL0"); tryRead(2000); drainInput()
-        write("ATS0"); tryRead(2000); drainInput()
+        // ATSP0 — протокол ПЕРВЫМ (как в AndrOBD)
+        write("ATSP0"); tryRead(INIT_TIMEOUT); drainInput()
 
-        // Шаг 2: detectClone ДО ветвления ATAT1/ATST
+        // ATI для детекта клона (безопасно после ATSP0)
         val ati = try { sendCommand("ATI") } catch (_: Exception) { "" }
         isClone = ati.contains("v1.5") || ati.contains("V1.5")
-        if (isClone) Log.i(TAG, "clone v1.5 detected — ATAT1 disabled, ATST fixed")
 
-        // Шаг 3: ветвление — ATAT1 или фиксированный ATST
-        if (isClone) {
-            write("ATST${ATST_CLONE.toString(16).uppercase().padStart(2, '0')}")
-            tryRead(2000); drainInput()
-        } else {
+        // ATAT1 — только для оригинала
+        if (!isClone) {
             write("ATAT1"); tryRead(2000); drainInput()
             updateAtst()
+        } else {
+            Log.i(TAG, "clone v1.5 — ATAT1/ATST skipped")
         }
 
-        // Шаг 4: протокол
-        write("ATSP0"); tryRead(INIT_TIMEOUT); drainInput()
+        // Остальные — точно как в AndrOBD
+        write("ATS0"); tryRead(2000); drainInput()
+        write("ATL0"); tryRead(2000); drainInput()
+        write("ATE0"); tryRead(2000); drainInput()
 
         state = State.READY
         Log.i(TAG, "ready (clone=${isClone})")
