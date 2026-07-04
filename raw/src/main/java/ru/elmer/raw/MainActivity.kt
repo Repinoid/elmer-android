@@ -24,6 +24,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvLastCmd: TextView
     private lateinit var tvLastResponse: TextView
     private lateinit var tvCount: TextView
+    private lateinit var tvWarning: TextView
     private lateinit var spinnerDevices: Spinner
     private lateinit var btnStart: Button
     private lateinit var btnStop: Button
@@ -95,6 +96,9 @@ class MainActivity : AppCompatActivity() {
         tvCount = TextView(this).apply { text = "Команд: 0 | Ошибок: 0" }
         root.addView(tvCount)
 
+        tvWarning = TextView(this).apply { text = ""; textSize = 12f; visibility = android.view.View.GONE }
+        root.addView(tvWarning)
+
         setContentView(root)
 
         // Кнопки
@@ -121,6 +125,18 @@ class MainActivity : AppCompatActivity() {
                     "ready" -> { btnStart.isEnabled = false; btnStop.isEnabled = true }
                     "bt_error", "server_error" -> {
                         btnStart.isEnabled = true; btnStop.isEnabled = false
+                    }
+                    "elm_frozen" -> {
+                        tvWarning.text = "⚠️ ELM залип! Пробую восстановить..."
+                        tvWarning.visibility = android.view.View.VISIBLE
+                    }
+                    "elm_recovered" -> {
+                        tvWarning.text = "✅ ELM восстановлен"
+                        tvWarning.visibility = android.view.View.VISIBLE
+                    }
+                    "elm_dead" -> {
+                        tvWarning.text = "❌ ELM не отвечает — выньте из OBD и вставьте обратно"
+                        tvWarning.visibility = android.view.View.VISIBLE
                     }
                 }
             }
