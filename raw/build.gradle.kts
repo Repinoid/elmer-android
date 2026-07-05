@@ -3,7 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-val appVersionName = "0.4.0-dev"
+val appVersionName = "0.4.1-dev"
 val appVersionCode = 18
 
 android {
