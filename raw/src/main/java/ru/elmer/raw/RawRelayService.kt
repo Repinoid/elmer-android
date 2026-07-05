@@ -110,11 +110,8 @@ class RawRelayService : Service() {
         }
         broadcast("elm_ready", "", "", 0, 0)
 
-        // 3. Инфо о клоне уже есть из init() (detectClone)
-        val clone = if (actor!!.isClone()) " (clone v1.5)" else ""
-        Log.i(TAG, "ELM: clone=${actor!!.isClone()}")
-        // hello с минимальной инфой — без ATDPN/ATRV чтобы не засорять буфер
-        if (!client!!.hello(if (actor!!.isClone()) "ELM327v1.5" else "ELM327", "A0", "12V")) {
+        // 3. hello
+        if (!client!!.hello("ELM327", "A0", "12V")) {
             broadcast("server_error", "", "", 0, 0)
             updateNotification("Сервер недоступен")
             stopSelf()
@@ -174,13 +171,6 @@ class RawRelayService : Service() {
             cmdCount++
             broadcast("cmd_done", cmd, raw.take(120), cmdCount, errCount)
             Log.i(TAG, "#$seq → ${raw.take(80)} (${elapsed}ms)")
-
-            // Recovery: если STOPPED или таймаут — перезапустить протокол
-            if (raw == "STOPPED" || raw.isEmpty()) {
-                Log.w(TAG, "recovery: ATSP0 after STOPPED/timeout")
-                try { actor!!.sendBlocking("ATSP0", 3000) } catch (_: Exception) {}
-                try { actor!!.drain() } catch (_: Exception) {}
-            }
         }
     }
 

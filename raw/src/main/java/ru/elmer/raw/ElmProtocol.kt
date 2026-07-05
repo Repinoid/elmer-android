@@ -5,16 +5,8 @@ import java.io.InputStream
 import java.io.OutputStream
 
 /**
- * AndrOBD Protocol — ПОЛНАЯ стейт-машина (1:1 копия ElmProt.java).
- *
- * Состояния: UNDEFINED → INITIALIZING → READY
- *            BUSY (команда) → READY
- *            ERROR → RECOVERING → READY
- *            BUS ERROR → DISCONNECTED → READY
- *
- * Источник: github.com/fr3ts0n/AndrOBD (1993⭐, 10 лет продакшена)
- *
- * НЕ ИЗМЕНЯТЬ. Проверено годами.
+ * ELM327 Protocol — AndrOBD ElmProt.java (fr3ts0n/AndrOBD).
+ * 10 лет в проде. Без самодеятельности.
  */
 class ElmProtocol(
     private val input: InputStream,
@@ -30,8 +22,7 @@ class ElmProtocol(
         private const val TIMEOUT_MAX  = 2000L
         private const val TIMEOUT_STEP = 20L
         private const val TIMEOUT_RES  = 4
-        private const val MAX_RETRIES  = 6     // потолок ретраев: 500+20×6 = 620мс
-        private const val ATST_CLONE  = 0x96  // 150×4=600ms — фиксированный для клонов
+        private const val MAX_RETRIES  = 3
     }
 
     private enum class State { UNDEFINED, INITIALIZING, READY, BUSY, ERROR, DISCONNECTED }
@@ -39,48 +30,27 @@ class ElmProtocol(
     @Volatile private var state = State.UNDEFINED
     private var timeoutMs = DEF_TIMEOUT
     private var learnedMin = TIMEOUT_MIN
-    @Volatile var isClone = false
-        private set
 
-    /**
-     * AndrOBD init: ATSP0→[ATAT1?]→ATS0→ATL0→ATE0.
-     * ТОЧНЫЙ порядок из ElmProt.java (fr3ts0n/AndrOBD).
-     * Клон v1.5: ATAT1 и ATST не шлём.
-     */
+    /** AndrOBD init: ATSP0 → ATAT1 → ATST → ATS0 → ATL0 → ATE0 */
     fun init() {
         Log.i(TAG, "init start")
         state = State.INITIALIZING
 
-        // ATSP0 — протокол ПЕРВЫМ (как в AndrOBD)
         write("ATSP0"); tryRead(INIT_TIMEOUT); drainInput()
-
-        // ATI для детекта клона (безопасно после ATSP0)
-        val ati = try { sendCommand("ATI") } catch (_: Exception) { "" }
-        isClone = ati.contains("v1.5") || ati.contains("V1.5")
-
-        // ATAT1 — только для оригинала
-        if (!isClone) {
-            write("ATAT1"); tryRead(2000); drainInput()
-            updateAtst()
-        } else {
-            Log.i(TAG, "clone v1.5 — ATAT1/ATST skipped")
-        }
-
-        // Остальные — точно как в AndrOBD
+        write("ATAT1"); tryRead(2000); drainInput()
+        updateAtst()
         write("ATS0"); tryRead(2000); drainInput()
         write("ATL0"); tryRead(2000); drainInput()
         write("ATE0"); tryRead(2000); drainInput()
 
         state = State.READY
-        Log.i(TAG, "ready (clone=${isClone})")
+        Log.i(TAG, "ready")
     }
 
     fun sendCommand(cmd: String): String {
         if (state == State.ERROR || state == State.DISCONNECTED) recover()
         state = State.BUSY
         val result = exec(cmd, timeoutMs)
-        // Полный дренаж с таймаутом — ловит хвосты после recovery
-        tryRead(500)
         drainInput()
         if (state == State.BUSY) state = State.READY
         return result
@@ -103,12 +73,14 @@ class ElmProtocol(
 
     private fun handle(raw: String): String {
         val u = raw.uppercase().trim()
+
         when {
-            u.startsWith("SEARCHING") -> { /* ждём */ }
+            u.startsWith("SEARCHING") -> {}
             u.startsWith("OK") -> decreaseTimeout()
 
             u.startsWith("NODATA") || u.startsWith("NO DATA") -> {
                 increaseTimeout()
+                updateAtst()
             }
 
             u.startsWith("STOPPED") -> {
@@ -117,25 +89,24 @@ class ElmProtocol(
                 resetTimeout()
             }
 
-            u.startsWith("UNABLE") || u.startsWith("NABLETO") -> {
-                Log.w(TAG, "UNABLE")
-                state = State.DISCONNECTED
-            }
-
             isBusError(u) -> {
-                Log.w(TAG, "BUS ERROR")
+                Log.w(TAG, "BUS ERROR: ${raw.take(60)}")
                 state = State.DISCONNECTED
-                resetTimeout()
+                resetTimeout(); updateAtst()
+                write("ATPC"); tryRead(3000)
+                write("ATSP0"); tryRead(3000)
             }
 
             u.startsWith("ERROR") && !u.startsWith("DATA ERROR") -> {
-                Log.w(TAG, "ERROR")
+                Log.w(TAG, "ERROR — warm start")
                 state = State.ERROR
+                write("ATWS"); tryRead(3000)
             }
 
             isDataError(u) -> {
-                Log.w(TAG, "data error")
+                Log.w(TAG, "data error — warm start")
                 state = State.ERROR
+                write("ATWS"); tryRead(3000)
             }
 
             else -> decreaseTimeout()
@@ -145,8 +116,11 @@ class ElmProtocol(
 
     private fun recover() {
         Log.i(TAG, "recovering...")
+        state = State.INITIALIZING
+        write("ATWS"); tryRead(2000); drainInput()
+        write("ATSP0"); tryRead(2000); drainInput()
+        write("ATE0"); tryRead(2000); drainInput()
         state = State.READY
-        resetTimeout()
     }
 
     private fun write(cmd: String) {
