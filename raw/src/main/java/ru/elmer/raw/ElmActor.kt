@@ -61,9 +61,6 @@ class ElmActor(
         executor.submit { elm.drainInput() }
     }
 
-    /** Проверить, является ли устройство клоном v1.5. */
-    fun isClone(): Boolean = elm.isClone
-
     /** Остановить executor. */
     fun shutdown() {
         try {
