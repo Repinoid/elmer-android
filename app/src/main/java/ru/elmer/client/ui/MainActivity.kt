@@ -39,7 +39,11 @@ class MainActivity : AppCompatActivity() {
     private var elmDevice: BluetoothDevice? = null
     private var elmChecker: ElmChecker? = null
     private var scriptRegistered = false
-    private val chatHistory = mutableListOf<Pair<String, String>>()
+
+    /** Контроллер чата с LLM */
+    private lateinit var chat: ChatController
+    /** Панель индикаторов-светофоров */
+    private lateinit var indicators: IndicatorBar
 
     private var dynamicCollector: DynamicCollector? = null
     private var dynamicSamples: MutableList<List<DynamicCollector.SampleResponse>>? = null
@@ -79,6 +83,11 @@ class MainActivity : AppCompatActivity() {
         indEcu = findViewById(R.id.ind_ecu)
         indLlm = findViewById(R.id.ind_llm)
 
+        // Инициализация новых компонентов
+        indicators = IndicatorBar(indServer, indElm, indEcu, indLlm)
+        indicators.onChange = { updateUiState() }
+        chat = ChatController { msg -> runOnUiThread { appendStatus(msg) } }
+
         btnAction.setOnClickListener { onAction() }
         btnSend.setOnClickListener { onSend() }
         btnHistory.setOnClickListener { showHistory() }
@@ -102,18 +111,11 @@ class MainActivity : AppCompatActivity() {
 
     // ── Светофоры ────────────────────────────────────────
 
-    private fun setIndicator(tv: TextView, label: String, color: String) {
-        val c = when (color) { "🟢" -> 0xFF4CAF50.toInt(); "🟡" -> 0xFFFFC107.toInt(); else -> 0xFFF44336.toInt() }
-        runOnUiThread {
-            tv.text = "$label $color"
-            tv.setTextColor(c)
-            updateUiState()
-        }
-    }
+    // setIndicator удалён — используем indicators.set(IndicatorBar.Id.XXX, IndicatorBar.State.XXX)
 
     private fun updateUiState() {
-        val elmOk = indElm.text.contains("🟢")
-        val llmOk = indLlm.text.contains("🟢")
+        val elmOk = indicators.isOk(IndicatorBar.Id.ELM)
+        val llmOk = indicators.isOk(IndicatorBar.Id.LLM)
         btnAction.isEnabled = elmOk
         btnAction.alpha = if (elmOk) 1.0f else 0.4f
         etUserInput.isEnabled = llmOk
@@ -142,27 +144,27 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkServer() {
-        setIndicator(indServer, "📡", "🟡")
+        indicators.set(IndicatorBar.Id.SERVER, IndicatorBar.State.CHECKING)
         debugLog("Пинг сервера...")
         try {
             val result = Config.client(this@MainActivity).ping()
             debugLog("Сервер: ${if (result.ok) "OK ${result.ms}ms" else result.error}")
-            setIndicator(indServer, "📡", if (result.ok) "🟢" else "🔴")
+            indicators.set(IndicatorBar.Id.SERVER, if (result.ok) IndicatorBar.State.OK else IndicatorBar.State.ERROR)
             if (result.ok) {
                 checkLlm()
                 syncPendingSessions()
             }
         } catch (e: Exception) {
             debugLog("Сервер: ${e.message}")
-            setIndicator(indServer, "📡", "🔴")
+            indicators.set(IndicatorBar.Id.SERVER, IndicatorBar.State.ERROR)
         }
     }
 
     private fun checkElm() {
-        setIndicator(indElm, "ELM", "🟡")
+        indicators.set(IndicatorBar.Id.ELM, IndicatorBar.State.CHECKING)
         debugLog("Поиск ELM...")
         val dev = findElmDevice()
-        if (dev == null) { debugLog("ELM не найден"); setIndicator(indElm, "ELM", "🔴"); return }
+        if (dev == null) { debugLog("ELM не найден"); indicators.set(IndicatorBar.Id.ELM, IndicatorBar.State.ERROR); return }
         elmDevice = dev
         debugLog("Найден: ${dev.name} (${dev.address})")
         try {
@@ -171,7 +173,7 @@ class MainActivity : AppCompatActivity() {
             if (r != null) {
                 elmChecker = checker
                 debugLog("ELM: версия=${r.version}, протокол=${r.protocol}, напряжение=${r.voltage}")
-                setIndicator(indElm, "ELM", "🟢")
+                indicators.set(IndicatorBar.Id.ELM, IndicatorBar.State.OK)
                 checkEcu()
 
                 // ── Speed-test: один раз в жизни устройства ──
@@ -207,39 +209,39 @@ class MainActivity : AppCompatActivity() {
                 }
             } else {
                 debugLog("ELM: нет ответа")
-                setIndicator(indElm, "ELM", "🔴")
+                indicators.set(IndicatorBar.Id.ELM, IndicatorBar.State.ERROR)
             }
         } catch (e: Exception) {
             debugLog("ELM: ${e.message}")
-            setIndicator(indElm, "ELM", "🔴")
+            indicators.set(IndicatorBar.Id.ELM, IndicatorBar.State.ERROR)
         }
     }
 
     private fun checkEcu() {
         val checker = elmChecker ?: return
-        setIndicator(indEcu, "ECU", "🟡")
+        indicators.set(IndicatorBar.Id.ECU, IndicatorBar.State.CHECKING)
         debugLog("Запрос ЭБУ (03)...")
         try {
             val raw = checker.sendRaw("03")
             debugLog("ЭБУ ответ: ${raw.take(40)}")
             val ok = raw.startsWith("43")
-            setIndicator(indEcu, "ECU", if (ok) "🟢" else "🔴")
+            indicators.set(IndicatorBar.Id.ECU, if (ok) IndicatorBar.State.OK else IndicatorBar.State.ERROR)
         } catch (e: Exception) {
             debugLog("ЭБУ: ${e.message}")
-            setIndicator(indEcu, "ECU", "🔴")
+            indicators.set(IndicatorBar.Id.ECU, IndicatorBar.State.ERROR)
         }
     }
 
     private fun checkLlm() {
-        setIndicator(indLlm, "LLM", "🟡")
+        indicators.set(IndicatorBar.Id.LLM, IndicatorBar.State.CHECKING)
         debugLog("Пинг LLM...")
         try {
             val result = Config.client(this@MainActivity).pingLlm()
             debugLog("LLM: ${if (result.ok) "OK ${result.ms}ms" else result.error}")
-            setIndicator(indLlm, "LLM", if (result.ok) "🟢" else "🔴")
+            indicators.set(IndicatorBar.Id.LLM, if (result.ok) IndicatorBar.State.OK else IndicatorBar.State.ERROR)
         } catch (e: Exception) {
             debugLog("LLM: ${e.message}")
-            setIndicator(indLlm, "LLM", "🔴")
+            indicators.set(IndicatorBar.Id.LLM, IndicatorBar.State.ERROR)
         }
     }
 
@@ -280,11 +282,11 @@ class MainActivity : AppCompatActivity() {
                     appendStatus("\n❌ ELM не отвечает")
                 } else if (r.isEmpty()) {
                     appendStatus("\n✅ Ошибок нет")
-                    setIndicator(indEcu, "ECU", "🟢")
+                    indicators.set(IndicatorBar.Id.ECU, IndicatorBar.State.OK)
                     elmChecker = checker
                 } else {
                     appendStatus("\n⚠️ Ошибки: ${r.joinToString(", ")}")
-                    setIndicator(indEcu, "ECU", "🟢")
+                    indicators.set(IndicatorBar.Id.ECU, IndicatorBar.State.OK)
                     elmChecker = checker
                 }
                 setActionState(State.DTC)
@@ -295,7 +297,7 @@ class MainActivity : AppCompatActivity() {
     private fun runDiagnostics() {
         if (runningDiag) return
         runningDiag = true
-        val serverOk = indServer.text.contains("🟢")
+        val serverOk = indicators.isOk(IndicatorBar.Id.SERVER)
         if (!serverOk) {
             appendStatus("\n⚠️ Сервер недоступен")
             appendStatus("\nСделайте тест на месте: газ до 3000 об/мин, 3-4 сек, сброс.")
@@ -311,59 +313,33 @@ class MainActivity : AppCompatActivity() {
         btnAction.text = "⏳ ОБРАБОТКА..."
         btnAction.isEnabled = false
 
-        thread(name = "Diagnostics", isDaemon = true) {
-            try {
-                val client = Config.client(this@MainActivity)
-                val scriptJson = client.downloadScript()
-                val script = org.json.JSONObject(scriptJson)
-                val stepsArr = script.getJSONArray("steps")
-                val total = stepsArr.length()
-                ui { appendStatus("\n📋 $total шагов") }
-
-                val results = mutableListOf<Map<String, String?>>()
-                for (i in 0 until total) {
-                    val s = stepsArr.getJSONObject(i)
-                    val cmd = s.optString("cmd", ""); if (cmd.isEmpty()) continue
-                    val desc = s.optString("desc", "")
-                    ui { updateLastLine("📡 $desc ($cmd)") }
-
-                    val raw = try { checker.sendRaw(cmd) } catch (e: Exception) { "(err)" }
-                    val decoded = ObdDecoder.decode(cmd, raw)
-                    results.add(mapOf("step_id" to s.optString("id", ""), "cmd" to cmd, "raw" to raw, "decoded" to decoded))
-                }
-
-                val count = results.size
-                val db = SessionDb(this@MainActivity)
-                val sid = db.createSession(scriptJson, "Диагностика", Config.HOST)
-                results.forEach { r -> db.addResponse(sid, r["step_id"] ?: "", r["cmd"] ?: "", r["raw"] ?: "", r["decoded"] ?: "") }
-
-                // Динамические сэмплы, если есть
-                val dynForUpload = dynamicSamples?.map { batch -> batch.map { r -> mapOf("step_id" to r.stepId, "cmd" to r.cmd, "raw" to r.raw, "decoded" to r.decoded, "ts" to r.ts.toString()) } }
-                dynamicSamples = null
-
-                ui { updateLastLine("📤 Отправка $count ответов...") }
-                val clientInfo = mapOf("phone_model" to Build.MODEL, "app_version" to (packageManager.getPackageInfo(packageName, 0).versionName ?: "?"))
-                val resp = client.uploadSession(sid, results, clientInfo, carInfo, dynForUpload)
-                timer.set(false)
-
-                if (resp != null) {
-                    db.markUploaded(sid)
-                    val d = resp.optString("diagnosis", "")
-                    if (d.isNotEmpty()) {
-                        db.saveDiagnosis(sid, d)
-                        ui { appendStatus("\n\n🩺 ДИАГНОЗ\n$d") }
+        val db = SessionDb(this)
+        val runner = DiagnosisRunner(checker, db, carInfo, dynamicSamples)
+        runner.onStage = { stage, detail ->
+            runOnUiThread {
+                when {
+                    stage.startsWith("step:") -> updateLastLine(detail)
+                    stage == "upload" -> updateLastLine(detail)
+                    stage == "info" -> appendStatus("\n$detail")
+                    stage == "done" -> {
+                        timer.set(false)
+                        appendStatus("\n\n$detail")
+                        setActionState(State.DIAG)
+                        btnAction.isEnabled = true
+                        runningDiag = false
                     }
-                } else {
-                    ui { appendStatus("\n⚠️ Сервер недоступен. Данные сохранены.") }
+                    stage == "error" -> {
+                        timer.set(false)
+                        appendStatus("\n$detail")
+                        setActionState(State.DIAG)
+                        btnAction.isEnabled = true
+                        runningDiag = false
+                    }
                 }
-            } catch (e: Exception) {
-                timer.set(false)
-                ui { appendStatus("\n❌ ${e.message}") }
             }
-            ui { setActionState(State.DIAG) }
-            ui { btnAction.isEnabled = true }
-            runningDiag = false
         }
+        runner.onDone = { dynamicSamples = null }
+        runner.run()
     }
 
     private fun startDynamicRecording() {
@@ -498,22 +474,9 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         } else if (text.isNotEmpty()) {
-            // Отправка текста в чат
-            chatHistory.add("user" to text)
-            appendStatus("\n👤 $text")
+            // Отправка текста в чат через ChatController
             etUserInput.text.clear()
-            thread(name = "Chat", isDaemon = true) {
-                try {
-                    val answer = Config.client(this@MainActivity).chat(text, chatHistory)
-                    if (answer != null) {
-                        runOnUiThread { chatHistory.add("assistant" to answer); appendStatus("\n🤖 $answer") }
-                    } else {
-                        runOnUiThread { appendStatus("\n❌ Сервер не ответил") }
-                    }
-                } catch (e: Exception) {
-                    runOnUiThread { appendStatus("\n❌ ${e.message}") }
-                }
-            }
+            chat.send(text)
         }
     }
 
@@ -523,7 +486,7 @@ class MainActivity : AppCompatActivity() {
         thread(name = "LoadHistory", isDaemon = true) {
             var sessions: List<Map<String, String?>>? = null
             // Пробуем сервер
-            if (indServer.text.contains("🟢")) {
+            if (indicators.isOk(IndicatorBar.Id.SERVER)) {
                 try {
                     val json = Config.client(this@MainActivity).getSessions()
                     if (json != null) {
