@@ -218,7 +218,7 @@ class MainActivity : AppCompatActivity() {
         setIndicator(indEcu, "ECU", "🟡")
         debugLog("Запрос ЭБУ (03)...")
         try {
-            val raw = checker.getElm()?.sendCommand("03") ?: ""
+            val raw = checker.sendRaw("03")
             debugLog("ЭБУ ответ: ${raw.take(40)}")
             val ok = raw.startsWith("43")
             setIndicator(indEcu, "ECU", if (ok) "🟢" else "🔴")
@@ -303,8 +303,6 @@ class MainActivity : AppCompatActivity() {
         }
         val checker = elmChecker
         if (checker == null) { appendStatus("\n❌ Нет связи с ELM"); runningDiag = false; return }
-        val elmProto = checker.getElm()
-        if (elmProto == null) { appendStatus("\n❌ ELM не инициализирован"); runningDiag = false; return }
 
         val carInfo = etUserInput.text.toString().trim()
         val timer = startTimer()
@@ -327,7 +325,7 @@ class MainActivity : AppCompatActivity() {
                     val desc = s.optString("desc", "")
                     ui { updateLastLine("📡 $desc ($cmd)") }
 
-                    val raw = try { elmProto.sendCommand(cmd) } catch (e: Exception) { "(err)" }
+                    val raw = try { checker.sendRaw(cmd) } catch (e: Exception) { "(err)" }
                     val decoded = ru.elmer.client.elm.ObdDecoder.decode(cmd, raw)
                     results.add(mapOf("step_id" to s.optString("id", ""), "cmd" to cmd, "raw" to raw, "decoded" to decoded))
                 }
@@ -380,11 +378,10 @@ class MainActivity : AppCompatActivity() {
                 if (checker == null) { ui { appendStatus("\n❌ Сначала считайте ошибки") }; runningDiag = false; return@thread }
                 if (!checker.ensureConnected()) {
                     Thread.sleep(500)
-                    if (!checker.ensureConnected() || checker.getElm() == null) {
+                    if (!checker.ensureConnected()) {
                         ui { appendStatus("\n❌ Нет связи с ELM") }; ui { setActionState(State.INIT) }; runningDiag = false; return@thread
                     }
                 }
-                val elmProto = checker.getElm()!!
 
                 // ── Статика ──
                 val staticCmds = listOf(
@@ -396,7 +393,7 @@ class MainActivity : AppCompatActivity() {
                 ui { appendStatus("\n📡 Статика...") }
                 for ((pid, desc) in staticCmds) {
                     val cmd = "01$pid"
-                    val raw = try { elmProto.sendCommand(cmd) } catch (_: Exception) { "(err)" }
+                    val raw = try { checker.sendRaw(cmd) } catch (_: Exception) { "(err)" }
                     if (raw.startsWith("41$pid") && raw.length > 5) {
                         val dec = ru.elmer.client.elm.ObdDecoder.decode(cmd, raw)
                         staticResults.add(ru.elmer.client.script.DynamicCollector.SampleResponse("pid_$pid", cmd, raw, dec, 0))
@@ -422,7 +419,7 @@ class MainActivity : AppCompatActivity() {
                         val cmd = s.optString("cmd", ""); if (cmd.isEmpty()) continue
                         val waitMs = s.optInt("wait", 0)
                         if (waitMs > 0) Thread.sleep(waitMs.toLong())
-                        val raw = try { elmProto.sendCommand(cmd) } catch (_: Exception) { "(err)" }
+                        val raw = try { checker.sendRaw(cmd) } catch (_: Exception) { "(err)" }
                         val dec = ru.elmer.client.elm.ObdDecoder.decode(cmd, raw)
                         allDyn.add(ru.elmer.client.script.DynamicCollector.SampleResponse("d${testRun}_$i", cmd, raw, dec, 0))
                         batch.add(mapOf("cmd" to cmd, "raw" to raw))

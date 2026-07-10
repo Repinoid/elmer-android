@@ -128,10 +128,7 @@ class ElmChecker(
     /** Проверить, подключен ли ELM. */
     fun isConnected(): Boolean = socket?.isConnected == true && elm != null
 
-    /** Получить ElmProtocol для прямых команд. */
-    fun getElm(): ElmProtocol? = elm
-
-    /** Отправить команду через ElmProtocol. Удобнее чем getElm()?.sendCommand(). */
+    /** Отправить команду через ElmProtocol. */
     fun sendRaw(cmd: String): String = elm?.sendCommand(cmd) ?: "(no elm)"
 
     /**
