@@ -505,20 +505,12 @@ class MainActivity : AppCompatActivity() {
             etUserInput.text.clear()
             thread(name = "Chat", isDaemon = true) {
                 try {
-                    val json = org.json.JSONObject().apply {
-                        put("question", text)
-                        put("history", org.json.JSONArray().apply {
-                            for ((role, msg) in chatHistory) put(org.json.JSONObject().apply { put("role", role); put("content", msg) })
-                        })
+                    val answer = Config.client(this@MainActivity).chat(text, chatHistory)
+                    if (answer != null) {
+                        runOnUiThread { chatHistory.add("assistant" to answer); appendStatus("\n🤖 $answer") }
+                    } else {
+                        runOnUiThread { appendStatus("\n❌ Сервер не ответил") }
                     }
-                    val req = java.net.URL("${Config.HOST}/api/v1/chat").openConnection() as java.net.HttpURLConnection
-                    req.connectTimeout = 10000; req.readTimeout = 60000; req.doOutput = true
-                    req.setRequestProperty("Content-Type", "application/json")
-                    req.outputStream.write(json.toString().toByteArray())
-                    val body = if (req.responseCode == 200) req.inputStream.bufferedReader().readText() else ""
-                    req.disconnect()
-                    val answer = try { org.json.JSONObject(body).optString("answer", "(пусто)") } catch (_: Exception) { body.take(200) }
-                    runOnUiThread { chatHistory.add("assistant" to answer); appendStatus("\n🤖 $answer") }
                 } catch (e: Exception) {
                     runOnUiThread { appendStatus("\n❌ ${e.message}") }
                 }
@@ -534,12 +526,8 @@ class MainActivity : AppCompatActivity() {
             // Пробуем сервер
             if (indServer.text.contains("🟢")) {
                 try {
-                    val req = java.net.URL("${Config.HOST}/api/v1/sessions").openConnection() as java.net.HttpURLConnection
-                    req.connectTimeout = 3000; req.readTimeout = 5000
-                    req.setRequestProperty("X-Api-Key", ru.elmer.client.BuildConfig.API_KEY)
-                    val body = if (req.responseCode == 200) req.inputStream.bufferedReader().readText() else ""
-                    req.disconnect()
-                    val json = org.json.JSONArray(body)
+                    val json = Config.client(this@MainActivity).getSessions()
+                    if (json != null) {
                     val list = mutableListOf<Map<String, String?>>()
                     for (i in 0 until json.length()) {
                         val j = json.getJSONObject(i)

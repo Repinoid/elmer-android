@@ -128,6 +128,54 @@ class ServerClient(
         }
     }
 
+    /** Отправка вопроса в чат LLM. Возвращает ответ или null. */
+    fun chat(question: String, history: List<Pair<String, String>>): String? {
+        Log.i(TAG, "Chat: $question")
+        return try {
+            val json = JSONObject().apply {
+                put("question", question)
+                put("history", JSONArray().apply {
+                    for ((role, msg) in history) {
+                        put(JSONObject().apply { put("role", role); put("content", msg) })
+                    }
+                })
+            }
+            val req = Request.Builder()
+                .url("$serverUrl/api/v1/chat")
+                .also { authHeaders(it) }
+                .post(json.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            val resp = http.newCall(req).execute()
+            val body = resp.body?.string() ?: ""
+            resp.close()
+            if (resp.isSuccessful) {
+                val answer = try { JSONObject(body).optString("answer", "(пусто)") } catch (_: Exception) { body.take(200) }
+                answer
+            } else null
+        } catch (e: IOException) {
+            Log.w(TAG, "Chat failed: ${e.message}")
+            null
+        }
+    }
+
+    /** Получение списка сессий с сервера. Возвращает JSONArray или null. */
+    fun getSessions(): JSONArray? {
+        Log.i(TAG, "Fetching sessions...")
+        return try {
+            val req = Request.Builder()
+                .url("$serverUrl/api/v1/sessions")
+                .also { authHeaders(it) }
+                .build()
+            val resp = http.newCall(req).execute()
+            val body = resp.body?.string() ?: ""
+            resp.close()
+            if (resp.isSuccessful) JSONArray(body) else null
+        } catch (e: Exception) {
+            Log.w(TAG, "Sessions failed: ${e.message}")
+            null
+        }
+    }
+
     data class PingResult(val ok: Boolean, val ms: Int, val error: String)
 
     /** Загружает батч ответов на сервер. Возвращает JSON-ответ или null. */
