@@ -1,7 +1,6 @@
 package ru.elmer.raw
 
 import android.Manifest
-import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.content.*
@@ -14,165 +13,125 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
 /**
- * Тонкий UI: статус, лог, кнопка Стоп.
+ * Минимальный UI для Raw Relay.
  *
- * Не делает ничего кроме отображения состояния RawRelayService.
+ * Показывает: статус, последнюю команду, последний ответ, счётчики.
+ * Запускает/останавливает RawRelayService.
+ *
+ * Выбор устройства из списка сопряжённых (bonded) Bluetooth-устройств.
  */
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var tvStatus: TextView
-    private lateinit var tvLastCmd: TextView
-    private lateinit var tvLastResponse: TextView
-    private lateinit var tvCount: TextView
-    private lateinit var tvWarning: TextView
-    private lateinit var spinnerDevices: Spinner
+    // ── UI ──────────────────────────────────────────────
+
+    private lateinit var deviceSpinner: Spinner
     private lateinit var btnStart: Button
     private lateinit var btnStop: Button
+    private lateinit var tvStatus: TextView
+    private lateinit var tvLastCmd: TextView
+    private lateinit var tvLastResp: TextView
+    private lateinit var tvCounters: TextView
 
-    private var receiver: BroadcastReceiver? = null
-    private var cmdCount = 0
-    private var errCount = 0
-    private var devices: List<BluetoothDevice> = emptyList()
+    // ── BT ──────────────────────────────────────────────
+
+    private val btAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
+    private var selectedDevice: BluetoothDevice? = null
+
+    // ── Сервис ──────────────────────────────────────────
+
+    private var serviceBound = false
+    private val statusReceiver = StatusReceiver()
+
+    companion object {
+        private const val REQUEST_BT = 1
+    }
+
+    // ── Жизненный цикл ──────────────────────────────────
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
 
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(48, 48, 48, 48)
+        // Запрос BT-разрешений на Android 12+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val missing = mutableListOf<String>()
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
+                != PackageManager.PERMISSION_GRANTED)
+                missing.add(Manifest.permission.BLUETOOTH_CONNECT)
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN)
+                != PackageManager.PERMISSION_GRANTED)
+                missing.add(Manifest.permission.BLUETOOTH_SCAN)
+            if (missing.isNotEmpty())
+                ActivityCompat.requestPermissions(this, missing.toTypedArray(), REQUEST_BT)
         }
 
-        root.addView(TextView(this).apply {
-            text = "ELM327 Raw Relay v${BuildConfig.VERSION_NAME}"
-            textSize = 22f
-        })
+        // Привязка UI
+        deviceSpinner = findViewById(R.id.device_spinner)
+        btnStart = findViewById(R.id.btn_start)
+        btnStop = findViewById(R.id.btn_stop)
+        tvStatus = findViewById(R.id.tv_status)
+        tvLastCmd = findViewById(R.id.tv_last_cmd)
+        tvLastResp = findViewById(R.id.tv_last_resp)
+        tvCounters = findViewById(R.id.tv_counters)
 
-        root.addView(TextView(this).apply {
-            text = "Выбери ELM327:"
-            textSize = 14f
-            setPadding(0, 16, 0, 4)
-        })
+        // Версия в заголовке
+        title = "ELM Relay v${BuildConfig.VERSION_NAME}"
 
-        // Загружаем сопряжённые устройства
-        devices = loadBondedDevices()
-        val names = devices.map { "${it.name ?: "?"}  (${it.address})" }
-        spinnerDevices = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity,
-                android.R.layout.simple_spinner_dropdown_item,
-                if (names.isNotEmpty()) names else listOf("Нет сопряжённых устройств"))
-        }
-        root.addView(spinnerDevices)
+        // Обновить список устройств
+        findViewById<Button>(R.id.btn_refresh).setOnClickListener { loadDevices() }
 
-        root.addView(Button(this).apply {
-            text = "🔄 Обновить список"
-            setOnClickListener {
-                devices = loadBondedDevices()
-                val n = devices.map { "${it.name ?: "?"}  (${it.address})" }
-                (spinnerDevices.adapter as ArrayAdapter<String>).let { a ->
-                    a.clear()
-                    a.addAll(if (n.isNotEmpty()) n else listOf("Нет сопряжённых устройств"))
-                }
-                Toast.makeText(this@MainActivity,
-                    "Найдено: ${devices.size}", Toast.LENGTH_SHORT).show()
-            }
-        })
-
-        val btnRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        btnStart = Button(this).apply { text = "Старт" }
-        btnStop = Button(this).apply { text = "Стоп"; isEnabled = false }
-        btnRow.addView(btnStart)
-        btnRow.addView(btnStop)
-        root.addView(btnRow)
-
-        tvStatus = TextView(this).apply { text = "Статус: ожидание" }
-        root.addView(tvStatus)
-
-        tvLastCmd = TextView(this).apply { text = "→ —" }
-        root.addView(tvLastCmd)
-
-        tvLastResponse = TextView(this).apply { text = "← —" }
-        root.addView(tvLastResponse)
-
-        tvCount = TextView(this).apply { text = "Команд: 0 | Ошибок: 0" }
-        root.addView(tvCount)
-
-        tvWarning = TextView(this).apply { text = ""; textSize = 12f; visibility = android.view.View.GONE }
-        root.addView(tvWarning)
-
-        setContentView(root)
-
-        // Кнопки
+        // Старт/стоп сервиса
         btnStart.setOnClickListener { startRelay() }
         btnStop.setOnClickListener { stopRelay() }
-    }
 
-    override fun onResume() {
-        super.onResume()
-        receiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context?, intent: Intent?) {
-                val state = intent?.getStringExtra(RawRelayService.EXTRA_STATE) ?: return
-                val cmd = intent.getStringExtra(RawRelayService.EXTRA_CMD) ?: ""
-                val response = intent.getStringExtra(RawRelayService.EXTRA_RESPONSE) ?: ""
-                cmdCount = intent.getIntExtra(RawRelayService.EXTRA_COUNT, cmdCount)
-                errCount = intent.getIntExtra(RawRelayService.EXTRA_ERRORS, errCount)
-
-                tvStatus.text = "Статус: $state"
-                if (cmd.isNotEmpty()) tvLastCmd.text = "→ $cmd"
-                if (response.isNotEmpty()) tvLastResponse.text = "← $response"
-                tvCount.text = "Команд: $cmdCount | Ошибок: $errCount"
-
-                when (state) {
-                    "ready" -> { btnStart.isEnabled = false; btnStop.isEnabled = true }
-                    "bt_error", "server_error" -> {
-                        btnStart.isEnabled = true; btnStop.isEnabled = false
-                    }
-                    "elm_frozen" -> {
-                        tvWarning.text = "⚠️ ELM залип! Пробую восстановить..."
-                        tvWarning.visibility = android.view.View.VISIBLE
-                    }
-                    "elm_recovered" -> {
-                        tvWarning.text = "✅ ELM восстановлен"
-                        tvWarning.visibility = android.view.View.VISIBLE
-                    }
-                    "elm_dead" -> {
-                        tvWarning.text = "❌ ELM не отвечает — выньте из OBD и вставьте обратно"
-                        tvWarning.visibility = android.view.View.VISIBLE
-                    }
-                }
-            }
+        // Приёмник статуса от сервиса
+        val filter = IntentFilter(RawRelayService.BROADCAST_STATUS)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(statusReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(statusReceiver, filter)
         }
-        registerReceiver(receiver, IntentFilter(RawRelayService.BROADCAST_STATUS),
-            ContextCompat.RECEIVER_EXPORTED)
+
+        loadDevices()
     }
 
-    override fun onPause() {
-        super.onPause()
-        receiver?.let { unregisterReceiver(it) }
+    override fun onDestroy() {
+        super.onDestroy()
+        try { unregisterReceiver(statusReceiver) } catch (_: Exception) {}
     }
 
+    // ── BT-устройства ───────────────────────────────────
+
+    /** Загрузить список сопряжённых устройств в Spinner. */
+    private fun loadDevices() {
+        val devices = btAdapter?.bondedDevices?.toList() ?: emptyList()
+        val names = devices.map { "${it.name} (${it.address})" }
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, names)
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        deviceSpinner.adapter = adapter
+        if (devices.isNotEmpty()) selectedDevice = devices[0]
+    }
+
+    // ── Управление сервисом ─────────────────────────────
+
+    /** Запустить relay-сервис. Сервер URL берётся из Config (BuildConfig). */
     private fun startRelay() {
-        val idx = spinnerDevices.selectedItemPosition
-        if (idx < 0 || idx >= devices.size) {
-            Toast.makeText(this, "Нет сопряжённых устройств. Сопряги ELM327 в настройках Bluetooth.", Toast.LENGTH_LONG).show()
-            return
-        }
-        val mac = devices[idx].address
-        val name = devices[idx].name ?: mac
-        if (mac.isEmpty()) { Toast.makeText(this, "Ошибка MAC", Toast.LENGTH_SHORT).show(); return }
-
-        if (!checkBtPermissions()) return
-
-        Toast.makeText(this, "Подключение к $name...", Toast.LENGTH_SHORT).show()
+        val device = selectedDevice ?: return
         val intent = Intent(this, RawRelayService::class.java).apply {
             action = RawRelayService.ACTION_RUN
-            putExtra(RawRelayService.EXTRA_DEVICE_MAC, mac)
-            putExtra(RawRelayService.EXTRA_SERVER_URL, BuildConfig.SERVER_URL)
+            putExtra(RawRelayService.EXTRA_DEVICE_MAC, device.address)
+            // SERVER_URL НЕ передаём — сервис сам читает из Config.SERVER_URL
         }
-        startService(intent)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
         btnStart.isEnabled = false
-        tvStatus.text = "Статус: запуск..."
+        btnStop.isEnabled = true
     }
 
+    /** Остановить relay-сервис. */
     private fun stopRelay() {
         val intent = Intent(this, RawRelayService::class.java).apply {
             action = RawRelayService.ACTION_STOP
@@ -180,27 +139,49 @@ class MainActivity : AppCompatActivity() {
         startService(intent)
         btnStart.isEnabled = true
         btnStop.isEnabled = false
-        tvStatus.text = "Статус: остановлен"
     }
 
-    private fun checkBtPermissions(): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
-                != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this,
-                    arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN), 1)
-                return false
+    // ── Приём статуса ───────────────────────────────────
+
+    /**
+     * BroadcastReceiver для статуса от RawRelayService.
+     * Получает: state, cmd, response, count, errors.
+     */
+    inner class StatusReceiver : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != RawRelayService.BROADCAST_STATUS) return
+
+            val state = intent.getStringExtra(RawRelayService.EXTRA_STATE) ?: ""
+            val cmd = intent.getStringExtra(RawRelayService.EXTRA_CMD) ?: ""
+            val response = intent.getStringExtra(RawRelayService.EXTRA_RESPONSE) ?: ""
+            val count = intent.getIntExtra(RawRelayService.EXTRA_COUNT, 0)
+            val errors = intent.getIntExtra(RawRelayService.EXTRA_ERRORS, 0)
+
+            // Статус с эмодзи
+            val stateText = when (state) {
+                "connecting" -> "🔌 Подключение BT..."
+                "bt_connecting" -> "🔌 BT..."
+                "bt_error" -> "🔴 Ошибка BT"
+                "elm_init" -> "⚙️ Инициализация ELM..."
+                "elm_ready" -> "🟢 ELM готов"
+                "elm_error" -> "🔴 Ошибка ELM"
+                "ready" -> "🟢 Готов — жду команд"
+                "server_error" -> "🔴 Сервер недоступен"
+                "cmd_send" -> "📤 → $cmd"
+                "cmd_done" -> "📥 ← ${response.take(60)}"
+                else -> state
+            }
+            tvStatus.text = stateText
+
+            if (cmd.isNotEmpty()) tvLastCmd.text = "→ $cmd"
+            if (response.isNotEmpty()) tvLastResp.text = "← $response"
+            tvCounters.text = "Команд: $count | Ошибок: $errors"
+
+            // Авто-стоп при ошибках
+            if (state == "bt_error" || state == "elm_error" || state == "server_error") {
+                btnStart.isEnabled = true
+                btnStop.isEnabled = false
             }
         }
-        return true
-    }
-
-    private fun loadBondedDevices(): List<BluetoothDevice> {
-        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return emptyList()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
-                != PackageManager.PERMISSION_GRANTED) return emptyList()
-        }
-        return adapter.bondedDevices.toList()
     }
 }
