@@ -131,6 +131,9 @@ class ElmChecker(
     /** Получить ElmProtocol для прямых команд. */
     fun getElm(): ElmProtocol? = elm
 
+    /** Отправить команду через ElmProtocol. Удобнее чем getElm()?.sendCommand(). */
+    fun sendRaw(cmd: String): String = elm?.sendCommand(cmd) ?: "(no elm)"
+
     /**
      * Быстрая проверка: один PID (RPM), один замер.
      * Используется при каждом подключении для сверки с профилем.
