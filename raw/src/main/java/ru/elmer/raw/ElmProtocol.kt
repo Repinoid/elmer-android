@@ -31,7 +31,12 @@ class ElmProtocol(
     private var timeoutMs = DEF_TIMEOUT
     private var learnedMin = TIMEOUT_MIN
 
-    /** AndrOBD init: ATSP0 → ATAT1 → ATST → ATS0 → ATL0 → ATE0 */
+    /**
+     * AndrOBD init: ATSP0 → ATAT1 → ATST → ATS0 → ATL0 → ATE0.
+     *
+     * TODO: портировать detectClone() / isClone из app/ElmProtocol.kt.
+     * Без этого v1.5 клоны вешаются на ATAT1.
+     */
     fun init() {
         Log.i(TAG, "init start")
         state = State.INITIALIZING
