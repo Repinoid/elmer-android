@@ -15,6 +15,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import kotlin.concurrent.thread
 import ru.elmer.client.R
+import ru.elmer.client.Config
 import ru.elmer.client.db.SessionDb
 import ru.elmer.client.script.ScriptRunnerService
 
@@ -142,14 +143,10 @@ class MainActivity : AppCompatActivity() {
         setIndicator(indServer, "📡", "🟡")
         debugLog("Пинг сервера...")
         try {
-            val url = java.net.URL("https://obdai.ru/api/v1/ping")
-            val conn = url.openConnection() as java.net.HttpURLConnection
-            conn.connectTimeout = 3000; conn.readTimeout = 3000
-            val code = conn.responseCode
-            conn.disconnect()
-            debugLog("Сервер: $code")
-            setIndicator(indServer, "📡", if (code == 200) "🟢" else "🔴")
-            if (code == 200) {
+            val result = Config.client(this@MainActivity).ping()
+            debugLog("Сервер: ${if (result.ok) "OK ${result.ms}ms" else result.error}")
+            setIndicator(indServer, "📡", if (result.ok) "🟢" else "🔴")
+            if (result.ok) {
                 checkLlm()
                 syncPendingSessions()
             }
@@ -179,7 +176,7 @@ class MainActivity : AppCompatActivity() {
                 val elmMac = dev.address
                 thread(name = "SpeedTest", isDaemon = true) {
                     try {
-                        val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
+                        val client = Config.client(this@MainActivity)
                         val saved = client.getProfileResponseTime(elmMac)
                         if (saved != null && saved > 0) {
                             // Профиль есть — быстрая сверка
@@ -235,13 +232,9 @@ class MainActivity : AppCompatActivity() {
         setIndicator(indLlm, "LLM", "🟡")
         debugLog("Пинг LLM...")
         try {
-            val url = java.net.URL("https://obdai.ru/api/v1/ping-llm")
-            val conn = url.openConnection() as java.net.HttpURLConnection
-            conn.connectTimeout = 5000; conn.readTimeout = 5000
-            val code = conn.responseCode
-            conn.disconnect()
-            debugLog("LLM: $code")
-            setIndicator(indLlm, "LLM", if (code == 200) "🟢" else "🔴")
+            val result = Config.client(this@MainActivity).pingLlm()
+            debugLog("LLM: ${if (result.ok) "OK ${result.ms}ms" else result.error}")
+            setIndicator(indLlm, "LLM", if (result.ok) "🟢" else "🔴")
         } catch (e: Exception) {
             debugLog("LLM: ${e.message}")
             setIndicator(indLlm, "LLM", "🔴")
@@ -320,7 +313,7 @@ class MainActivity : AppCompatActivity() {
 
         thread(name = "Diagnostics", isDaemon = true) {
             try {
-                val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
+                val client = Config.client(this@MainActivity)
                 val scriptJson = client.downloadScript()
                 val script = org.json.JSONObject(scriptJson)
                 val stepsArr = script.getJSONArray("steps")
@@ -341,7 +334,7 @@ class MainActivity : AppCompatActivity() {
 
                 val count = results.size
                 val db = SessionDb(this@MainActivity)
-                val sid = db.createSession(scriptJson, "Диагностика", "https://obdai.ru")
+                val sid = db.createSession(scriptJson, "Диагностика", Config.HOST)
                 results.forEach { r -> db.addResponse(sid, r["step_id"] ?: "", r["cmd"] ?: "", r["raw"] ?: "", r["decoded"] ?: "") }
 
                 // Динамические сэмплы, если есть
@@ -411,7 +404,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 // ── Авто-подбор ──
-                val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
+                val client = Config.client(this@MainActivity)
                 val allDyn = mutableListOf<ru.elmer.client.script.DynamicCollector.SampleResponse>()
                 var testRun = 0
                 var done = false
@@ -480,14 +473,14 @@ class MainActivity : AppCompatActivity() {
             thread(name = "Upload", isDaemon = true) {
                 try {
                     val db = SessionDb(this@MainActivity)
-                    val sid = db.createSession("{}", "Тест", "https://obdai.ru")
+                    val sid = db.createSession("{}", "Тест", Config.HOST)
                     val samples = dynamicSamples!!
                     samples.forEachIndexed { i, batch ->
                         batch.forEach { r -> db.addResponse(sid, "sample_$i", r.cmd, r.raw, r.decoded) }
                     }
                     val responses = db.getResponses(sid)
                     val clientInfo = mapOf("phone_model" to Build.MODEL, "app_version" to (packageManager.getPackageInfo(packageName, 0).versionName ?: "?"))
-                    val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
+                    val client = Config.client(this@MainActivity)
                     val dynForUpload = samples.map { batch -> batch.map { r -> mapOf("step_id" to r.stepId, "cmd" to r.cmd, "raw" to r.raw, "decoded" to r.decoded, "ts" to r.ts.toString()) } }
                     val resp = client.uploadSession(sid, emptyList(), clientInfo, text, dynForUpload)
                     dynamicSamples = null
@@ -518,7 +511,7 @@ class MainActivity : AppCompatActivity() {
                             for ((role, msg) in chatHistory) put(org.json.JSONObject().apply { put("role", role); put("content", msg) })
                         })
                     }
-                    val req = java.net.URL("https://obdai.ru/api/v1/chat").openConnection() as java.net.HttpURLConnection
+                    val req = java.net.URL("${Config.HOST}/api/v1/chat").openConnection() as java.net.HttpURLConnection
                     req.connectTimeout = 10000; req.readTimeout = 60000; req.doOutput = true
                     req.setRequestProperty("Content-Type", "application/json")
                     req.outputStream.write(json.toString().toByteArray())
@@ -541,7 +534,7 @@ class MainActivity : AppCompatActivity() {
             // Пробуем сервер
             if (indServer.text.contains("🟢")) {
                 try {
-                    val req = java.net.URL("https://obdai.ru/api/v1/sessions").openConnection() as java.net.HttpURLConnection
+                    val req = java.net.URL("${Config.HOST}/api/v1/sessions").openConnection() as java.net.HttpURLConnection
                     req.connectTimeout = 3000; req.readTimeout = 5000
                     req.setRequestProperty("X-Api-Key", ru.elmer.client.BuildConfig.API_KEY)
                     val body = if (req.responseCode == 200) req.inputStream.bufferedReader().readText() else ""
@@ -662,7 +655,7 @@ class MainActivity : AppCompatActivity() {
                 val pending = db.getPendingSessions()
                 if (pending.isEmpty()) return@thread
                 debugLog("Синхронизация ${pending.size} сессий...")
-                val client = ru.elmer.client.server.ServerClient("https://obdai.ru", "https://obdai.ru/api/v1/script", "")
+                val client = Config.client(this@MainActivity)
                 for (sid in pending) {
                     val responses = db.getResponses(sid)
                     if (responses.isEmpty()) continue

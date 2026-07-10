@@ -17,6 +17,7 @@ import org.json.JSONObject
 import java.io.IOException
 import java.util.UUID
 import kotlin.concurrent.thread
+import ru.elmer.client.Config
 import ru.elmer.client.db.SessionDb
 import ru.elmer.client.elm.ElmProtocol
 import ru.elmer.client.server.ServerClient
@@ -114,8 +115,8 @@ class ScriptRunnerService : Service() {
         running = true
         scriptUrl = intent.getStringExtra(EXTRA_SCRIPT_URL)
             ?: intent.getStringExtra(EXTRA_SERVER_URL)?.let { "$it/api/v1/script" }
-            ?: "https://obdai.ru/api/v1/script"
-        serverUrl = intent.getStringExtra(EXTRA_SERVER_URL) ?: "https://obdai.ru"
+            ?: Config.SCRIPT_URL
+        serverUrl = intent.getStringExtra(EXTRA_SERVER_URL) ?: Config.HOST
         carInfo = intent.getStringExtra(EXTRA_CAR_INFO) ?: ""
         dynamicSamplesJson = intent.getStringExtra(EXTRA_DYNAMIC_SAMPLES)
         elmMac = intent.getStringExtra("elm_mac") ?: ""
