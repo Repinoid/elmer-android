@@ -20,7 +20,6 @@ import ru.elmer.client.db.SessionDb
 import ru.elmer.client.elm.ElmChecker
 import ru.elmer.client.elm.ObdDecoder
 import ru.elmer.client.script.DynamicCollector
-import ru.elmer.client.script.ScriptRunnerService
 
 class MainActivity : AppCompatActivity() {
 

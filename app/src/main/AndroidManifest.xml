@@ -8,8 +8,6 @@
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application
         android:allowBackup="true"
@@ -17,10 +15,6 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Elmer">
 
-        <service
-            android:name=".script.ScriptRunnerService"
-            android:foregroundServiceType="dataSync"
-            android:exported="false" />
 
         <activity
             android:name=".ui.MainActivity"
