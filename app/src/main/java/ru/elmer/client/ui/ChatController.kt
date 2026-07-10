@@ -12,6 +12,7 @@ package ru.elmer.client.ui
  *   chat.clear()                   // очистить историю
  */
 class ChatController(
+    private val context: android.content.Context,
     private val onOutput: (String) -> Unit
 ) {
     /** История диалога: пары (role, content). role = "user" или "assistant". */
@@ -33,8 +34,8 @@ class ChatController(
         // Отправляем на сервер в фоновом потоке
         Thread {
             try {
-                val answer = ru.elmer.client.Config.client(null)
-                    ?.chat(question, history)
+                val answer = ru.elmer.client.Config.client(context)
+                    .chat(question, history)
                 if (answer != null) {
                     history.add("assistant" to answer)
                     onOutput("\n🤖 $answer")

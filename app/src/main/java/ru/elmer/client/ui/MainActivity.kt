@@ -86,7 +86,7 @@ class MainActivity : AppCompatActivity() {
         // Инициализация новых компонентов
         indicators = IndicatorBar(indServer, indElm, indEcu, indLlm)
         indicators.onChange = { updateUiState() }
-        chat = ChatController { msg -> runOnUiThread { appendStatus(msg) } }
+        chat = ChatController(this) { msg -> runOnUiThread { appendStatus(msg) } }
 
         btnAction.setOnClickListener { onAction() }
         btnSend.setOnClickListener { onSend() }
@@ -314,7 +314,7 @@ class MainActivity : AppCompatActivity() {
         btnAction.isEnabled = false
 
         val db = SessionDb(this)
-        val runner = DiagnosisRunner(checker, db, carInfo, dynamicSamples)
+        val runner = DiagnosisRunner(this, checker, db, carInfo, dynamicSamples)
         runner.onStage = { stage, detail ->
             runOnUiThread {
                 when {
@@ -490,16 +490,17 @@ class MainActivity : AppCompatActivity() {
                 try {
                     val json = Config.client(this@MainActivity).getSessions()
                     if (json != null) {
-                    val list = mutableListOf<Map<String, String?>>()
-                    for (i in 0 until json.length()) {
-                        val j = json.getJSONObject(i)
-                        list.add(mapOf(
-                            "id" to j.optString("id"), "title" to j.optString("title"),
-                            "created_at" to j.optString("created_at"), "uploaded" to "1",
-                            "diagnosis" to j.optString("diagnosis")
-                        ))
+                        val list = mutableListOf<Map<String, String?>>()
+                        for (i in 0 until json.length()) {
+                            val j = json.getJSONObject(i)
+                            list.add(mapOf(
+                                "id" to j.optString("id"), "title" to j.optString("title"),
+                                "created_at" to j.optString("created_at"), "uploaded" to "1",
+                                "diagnosis" to j.optString("diagnosis")
+                            ))
+                        }
+                        sessions = list
                     }
-                    sessions = list
                 } catch (_: Exception) { }
             }
             // Fallback: локальная БД
@@ -621,8 +622,10 @@ class MainActivity : AppCompatActivity() {
     private fun registerScriptReceiver() {
         if (scriptRegistered) return
         scriptRegistered = true
-        registerReceiver(scriptStatusReceiver, IntentFilter(ScriptRunnerService.BROADCAST_STATUS), ContextCompat.RECEIVER_NOT_EXPORTED)
-        registerReceiver(scriptStageReceiver, IntentFilter(ScriptRunnerService.BROADCAST_STAGE), ContextCompat.RECEIVER_NOT_EXPORTED)
+        registerReceiver(scriptStatusReceiver, IntentFilter("ru.elmer.client.SCRIPT_STATUS"),
+            ContextCompat.RECEIVER_NOT_EXPORTED)
+        registerReceiver(scriptStageReceiver, IntentFilter("ru.elmer.client.SCRIPT_STAGE"),
+            ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
     private val scriptStageReceiver = object : BroadcastReceiver() {
