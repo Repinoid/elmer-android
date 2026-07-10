@@ -22,7 +22,7 @@ class ElmProtocol(
         private const val TIMEOUT_MAX  = 2000L
         private const val TIMEOUT_STEP = 20L
         private const val TIMEOUT_RES  = 4
-        private const val MAX_RETRIES  = 6
+        private const val MAX_RETRIES  = 3
     }
 
     private enum class State { UNDEFINED, INITIALIZING, READY, BUSY, ERROR, DISCONNECTED }
