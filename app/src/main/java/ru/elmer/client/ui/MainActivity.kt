@@ -17,6 +17,9 @@ import kotlin.concurrent.thread
 import ru.elmer.client.R
 import ru.elmer.client.Config
 import ru.elmer.client.db.SessionDb
+import ru.elmer.client.elm.ElmChecker
+import ru.elmer.client.elm.ObdDecoder
+import ru.elmer.client.script.DynamicCollector
 import ru.elmer.client.script.ScriptRunnerService
 
 class MainActivity : AppCompatActivity() {
@@ -35,12 +38,12 @@ class MainActivity : AppCompatActivity() {
 
     private val btAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     private var elmDevice: BluetoothDevice? = null
-    private var elmChecker: ru.elmer.client.elm.ElmChecker? = null
+    private var elmChecker: ElmChecker? = null
     private var scriptRegistered = false
     private val chatHistory = mutableListOf<Pair<String, String>>()
 
-    private var dynamicCollector: ru.elmer.client.script.DynamicCollector? = null
-    private var dynamicSamples: MutableList<List<ru.elmer.client.script.DynamicCollector.SampleResponse>>? = null
+    private var dynamicCollector: DynamicCollector? = null
+    private var dynamicSamples: MutableList<List<DynamicCollector.SampleResponse>>? = null
 
     enum class State { INIT, DTC, DIAG, START, STOP }
     private var state = State.INIT
@@ -164,7 +167,7 @@ class MainActivity : AppCompatActivity() {
         elmDevice = dev
         debugLog("Найден: ${dev.name} (${dev.address})")
         try {
-            val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
+            val checker = ElmChecker(dev, btAdapter!!)
             val r = checker.checkDevice()
             if (r != null) {
                 elmChecker = checker
@@ -270,7 +273,7 @@ class MainActivity : AppCompatActivity() {
         appendStatus("\n─── Сканирование ошибок ───")
         var timer: java.util.concurrent.atomic.AtomicBoolean? = null
         thread(name = "DtcScan", isDaemon = true) {
-            val checker = ru.elmer.client.elm.ElmChecker(dev, btAdapter!!)
+            val checker = ElmChecker(dev, btAdapter!!)
             val r = checker.scanDtc()
             timer?.set(false)
             runOnUiThread {
@@ -326,7 +329,7 @@ class MainActivity : AppCompatActivity() {
                     ui { updateLastLine("📡 $desc ($cmd)") }
 
                     val raw = try { checker.sendRaw(cmd) } catch (e: Exception) { "(err)" }
-                    val decoded = ru.elmer.client.elm.ObdDecoder.decode(cmd, raw)
+                    val decoded = ObdDecoder.decode(cmd, raw)
                     results.add(mapOf("step_id" to s.optString("id", ""), "cmd" to cmd, "raw" to raw, "decoded" to decoded))
                 }
 
@@ -389,20 +392,20 @@ class MainActivity : AppCompatActivity() {
                     "07" to "LTFT", "0B" to "MAP", "0D" to "Скорость",
                     "0F" to "IAT", "11" to "Дроссель", "1F" to "Runtime"
                 )
-                val staticResults = mutableListOf<ru.elmer.client.script.DynamicCollector.SampleResponse>()
+                val staticResults = mutableListOf<DynamicCollector.SampleResponse>()
                 ui { appendStatus("\n📡 Статика...") }
                 for ((pid, desc) in staticCmds) {
                     val cmd = "01$pid"
                     val raw = try { checker.sendRaw(cmd) } catch (_: Exception) { "(err)" }
                     if (raw.startsWith("41$pid") && raw.length > 5) {
-                        val dec = ru.elmer.client.elm.ObdDecoder.decode(cmd, raw)
-                        staticResults.add(ru.elmer.client.script.DynamicCollector.SampleResponse("pid_$pid", cmd, raw, dec, 0))
+                        val dec = ObdDecoder.decode(cmd, raw)
+                        staticResults.add(DynamicCollector.SampleResponse("pid_$pid", cmd, raw, dec, 0))
                     }
                 }
 
                 // ── Авто-подбор ──
                 val client = Config.client(this@MainActivity)
-                val allDyn = mutableListOf<ru.elmer.client.script.DynamicCollector.SampleResponse>()
+                val allDyn = mutableListOf<DynamicCollector.SampleResponse>()
                 var testRun = 0
                 var done = false
 
@@ -420,8 +423,8 @@ class MainActivity : AppCompatActivity() {
                         val waitMs = s.optInt("wait", 0)
                         if (waitMs > 0) Thread.sleep(waitMs.toLong())
                         val raw = try { checker.sendRaw(cmd) } catch (_: Exception) { "(err)" }
-                        val dec = ru.elmer.client.elm.ObdDecoder.decode(cmd, raw)
-                        allDyn.add(ru.elmer.client.script.DynamicCollector.SampleResponse("d${testRun}_$i", cmd, raw, dec, 0))
+                        val dec = ObdDecoder.decode(cmd, raw)
+                        allDyn.add(DynamicCollector.SampleResponse("d${testRun}_$i", cmd, raw, dec, 0))
                         batch.add(mapOf("cmd" to cmd, "raw" to raw))
                     }
                     if (done) break
