@@ -64,28 +64,6 @@ class ScriptRunnerService : Service() {
         const val BROADCAST_STATUS = "ru.elmer.client.SCRIPT_STATUS"
         const val BROADCAST_PROMPT = "ru.elmer.client.SCRIPT_PROMPT"
         const val BROADCAST_STAGE  = "ru.elmer.client.SCRIPT_STAGE"
-
-        val DEFAULT_SCRIPT = """
-{
-  "version": 1,
-  "title": "Базовая диагностика (офлайн)",
-  "steps": [
-    {"id": "vin",         "cmd": "0902", "desc": "VIN"},
-    {"id": "dtc_stored",  "cmd": "03",   "desc": "Ошибки (сохранённые)"},
-    {"id": "dtc_pending", "cmd": "07",   "desc": "Ошибки (ожидающие)"},
-    {"id": "pid_05", "cmd": "0105", "desc": "Температура ОЖ"},
-    {"id": "pid_0C", "cmd": "010C", "desc": "Обороты"},
-    {"id": "pid_0D", "cmd": "010D", "desc": "Скорость"},
-    {"id": "pid_11", "cmd": "0111", "desc": "Дроссель"},
-    {"id": "pid_0B", "cmd": "010B", "desc": "MAP"},
-    {"id": "pid_0F", "cmd": "010F", "desc": "IAT"},
-    {"id": "pid_1F", "cmd": "011F", "desc": "Время работы"},
-    {"id": "pid_04", "cmd": "0104", "desc": "Нагрузка"},
-    {"id": "pid_06", "cmd": "0106", "desc": "STFT"},
-    {"id": "pid_07", "cmd": "0107", "desc": "LTFT"}
-  ]
-}
-        """.trimIndent()
     }
 
     // ── Service lifecycle ───────────────────────────────
@@ -192,7 +170,7 @@ class ScriptRunnerService : Service() {
     // ── Script execution ────────────────────────────────
 
     private fun executeScript() {
-        val client = ServerClient(serverUrl, scriptUrl, DEFAULT_SCRIPT)
+        val client = ServerClient(serverUrl, scriptUrl, Config.defaultScript(this))
         val scriptJson = client.downloadScript()
 
         log("─── Инициализация ELM327 ───")
