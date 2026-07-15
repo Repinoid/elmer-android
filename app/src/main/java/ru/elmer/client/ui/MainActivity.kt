@@ -53,7 +53,10 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         const val REQUEST_BT_PERMISSIONS = 1
+        private const val PING_LLM_THROTTLE_MS = 60_000L
     }
+
+    private var lastPingLlmTime = 0L
 
     // ── Жизненный цикл ──────────────────────────────────
 
@@ -233,6 +236,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkLlm() {
+        // Throttle: не чаще раза в 60с — экономит платные LLM-токены
+        val now = System.currentTimeMillis()
+        val elapsed = now - lastPingLlmTime
+        if (elapsed < PING_LLM_THROTTLE_MS) {
+            debugLog("LLM: throttled (${(PING_LLM_THROTTLE_MS - elapsed) / 1000}с до след. проверки)")
+            return
+        }
+        lastPingLlmTime = now
         indicators.set(IndicatorBar.Id.LLM, IndicatorBar.State.CHECKING)
         debugLog("Пинг LLM...")
         try {
